@@ -58,7 +58,7 @@
       "description": "Persistent application settings with defaults and schema validation.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P02",
         "P03"

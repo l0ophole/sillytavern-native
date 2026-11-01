@@ -18,6 +18,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | P02 XDG paths and atomic file I/O | 02-stage-1-core-platform.md | yes | yes | pending | XDG dirs, fsync+rename atomic writes, 0600 option |
 | P03 JSON serialization layer | 02-stage-1-core-platform.md | yes | yes | pending | nlohmann/json wrapper with contextual errors |
 | P04 Logging and diagnostics | 02-stage-1-core-platform.md | yes | yes | pending | Thread-safe file/stderr log with secret redaction |
+| P05 Settings and preferences | 02-stage-1-core-platform.md | yes | yes | pending | Defaults, clamping, unknown-key preservation, 0600 save |
 
 ## Stages
 
