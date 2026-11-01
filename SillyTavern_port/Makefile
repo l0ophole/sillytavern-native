@@ -1,9 +1,18 @@
 CXX ?= g++
+AR ?= ar
 CXXFLAGS ?= -O2 -g
 CXXFLAGS += -std=c++17 -Wall -Wextra -Wpedantic -Ithird_party -Isrc -MMD -MP
 LDFLAGS ?=
 BUILD := build
 NCURSES_LIBS := $(shell pkg-config --libs ncursesw 2>/dev/null || echo -lncurses)
+CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
+CORE_LIBS := $(CURL_LIBS) -pthread
+
+CORE_SRCS := $(wildcard src/core/*.cpp)
+CORE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(CORE_SRCS))
+CORE_LIB := $(BUILD)/libstcore.a
+TEST_SRCS := $(wildcard tests/test_*.cpp)
+TEST_OBJS := $(patsubst tests/%.cpp,$(BUILD)/tests/%.o,$(TEST_SRCS))
 
 .PHONY: all menuconfig defconfig test smoke clean help
 
@@ -23,11 +32,22 @@ $(BUILD)/.configured: $(BUILD)/menuconfig features/features.json
 
 -include .config
 
-$(BUILD)/sillytavern-port: src/main.cpp $(BUILD)/features.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+$(BUILD)/core/%.o: src/core/%.cpp | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD)/run_tests: tests/test_main.cpp $(BUILD)/features.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+$(CORE_LIB): $(CORE_OBJS)
+	$(AR) rcs $@ $^
+
+$(BUILD)/tests/%.o: tests/%.cpp | $(BUILD)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -Itests -c $< -o $@
+
+$(BUILD)/sillytavern-port: src/main.cpp $(BUILD)/features.h $(CORE_LIB) | $(BUILD)
+	$(CXX) $(CXXFLAGS) src/main.cpp $(CORE_LIB) -o $@ $(CORE_LIBS)
+
+$(BUILD)/run_tests: $(TEST_OBJS) $(CORE_LIB) | $(BUILD)
+	$(CXX) $(CXXFLAGS) $(TEST_OBJS) $(CORE_LIB) -o $@ $(CORE_LIBS)
 
 test: $(BUILD)/run_tests
 	./$(BUILD)/run_tests
@@ -53,3 +73,5 @@ help:
 	@echo "  make test         build and run unit tests"
 	@echo "  make smoke        run the GUI smoke test (GTK stage)"
 	@echo "  make clean        remove build artifacts"
+
+-include $(wildcard $(BUILD)/core/*.d $(BUILD)/tests/*.d)
