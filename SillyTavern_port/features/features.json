@@ -1,0 +1,1310 @@
+{
+  "schema": 1,
+  "project": "SillyTavern C/C++ Port",
+  "source_version": "1.19.0",
+  "critical_definition": "Removing the feature breaks the loop: launch -> import/select character -> configure model -> send/receive -> persist/reload, for a single-user local install.",
+  "features": [
+    {
+      "id": "P01",
+      "group": "platform",
+      "name": "Build system and feature configuration",
+      "description": "Make-based build, ncurses menuconfig, feature registry, generated feature header.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": []
+    },
+    {
+      "id": "P02",
+      "group": "platform",
+      "name": "XDG paths and atomic file I/O",
+      "description": "XDG config/data directories, atomic writes, safe temporary files.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P01"
+      ]
+    },
+    {
+      "id": "P03",
+      "group": "platform",
+      "name": "JSON serialization layer",
+      "description": "Shared JSON parsing and serialization for cards, chats, settings, and API payloads.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P01"
+      ]
+    },
+    {
+      "id": "P04",
+      "group": "platform",
+      "name": "Logging and diagnostics",
+      "description": "Structured log file, severity levels, user-visible error reporting.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P01",
+        "P02"
+      ]
+    },
+    {
+      "id": "P05",
+      "group": "platform",
+      "name": "Settings and preferences",
+      "description": "Persistent application settings with defaults and schema validation.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P02",
+        "P03"
+      ]
+    },
+    {
+      "id": "P06",
+      "group": "platform",
+      "name": "Credential storage",
+      "description": "API key storage with restrictive permissions and no log leakage.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P05"
+      ]
+    },
+    {
+      "id": "P07",
+      "group": "platform",
+      "name": "HTTP/TLS and SSE transport",
+      "description": "libcurl HTTP client, TLS verification, streaming SSE line parser, cancellation.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P03",
+        "P04"
+      ]
+    },
+    {
+      "id": "P08",
+      "group": "platform",
+      "name": "GTK application shell and navigation",
+      "description": "Main window, header bar, menus, panels, dialogs, GTK main-loop integration.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P01"
+      ]
+    },
+    {
+      "id": "P09",
+      "group": "platform",
+      "name": "Single-instance and data locking",
+      "description": "Prevent concurrent writers and detect stale locks.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P02"
+      ]
+    },
+    {
+      "id": "P10",
+      "group": "platform",
+      "name": "Crash recovery and autosave journal",
+      "description": "Recover unsaved chat state after abnormal termination.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P02"
+      ]
+    },
+    {
+      "id": "P11",
+      "group": "platform",
+      "name": "Packaging and install targets",
+      "description": "Install target, desktop entry, icon, Arch/Alpine packaging metadata.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P01"
+      ]
+    },
+    {
+      "id": "P12",
+      "group": "platform",
+      "name": "Internationalization",
+      "description": "Translatable UI strings and locale-aware formatting.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "P13",
+      "group": "platform",
+      "name": "Accessibility",
+      "description": "Keyboard-only navigation, screen-reader labels, high-contrast support.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "P14",
+      "group": "platform",
+      "name": "DPI and theme integration",
+      "description": "Desktop theme, font, and high-DPI awareness.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "D01",
+      "group": "characters",
+      "name": "Character card parser",
+      "description": "Read PNG tEXt chara/ccv3, V2/V3 JSON, and legacy JSON cards.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P02",
+        "P03"
+      ]
+    },
+    {
+      "id": "D02",
+      "group": "characters",
+      "name": "Character library, import, avatars",
+      "description": "Scan, import, list, delete, and display character cards and avatars.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "D01",
+        "P02",
+        "P08"
+      ]
+    },
+    {
+      "id": "D03",
+      "group": "characters",
+      "name": "Character editor",
+      "description": "Create and edit character fields, greetings, and metadata.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D02"
+      ]
+    },
+    {
+      "id": "D04",
+      "group": "characters",
+      "name": "Character export",
+      "description": "Write compatible PNG/JSON character cards.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D01"
+      ]
+    },
+    {
+      "id": "D05",
+      "group": "characters",
+      "name": "Alternate greetings",
+      "description": "Select among multiple opening messages when starting a chat.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D02",
+        "C01"
+      ]
+    },
+    {
+      "id": "D06",
+      "group": "characters",
+      "name": "Tags, favorites, search, sort",
+      "description": "Organize and filter the character library.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D02"
+      ]
+    },
+    {
+      "id": "D07",
+      "group": "characters",
+      "name": "Character book",
+      "description": "Embedded lorebook attached to a character card.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D01",
+        "C31"
+      ]
+    },
+    {
+      "id": "D08",
+      "group": "characters",
+      "name": "CharX and BYAF import",
+      "description": "Import additional community card archive formats.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D01"
+      ]
+    },
+    {
+      "id": "D09",
+      "group": "characters",
+      "name": "Chat import and export",
+      "description": "Import Ooba/Agnai/CAI chats and export compatible JSONL.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C01"
+      ]
+    },
+    {
+      "id": "D10",
+      "group": "characters",
+      "name": "Bulk data migration",
+      "description": "Import many cards and chats from an existing SillyTavern data tree.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D01",
+        "C01"
+      ]
+    },
+    {
+      "id": "D11",
+      "group": "characters",
+      "name": "Asset and gallery storage",
+      "description": "Store generated images, sprites, and attachments.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P02"
+      ]
+    },
+    {
+      "id": "C01",
+      "group": "chat",
+      "name": "Chat session storage and lifecycle",
+      "description": "Create, load, save, rename, delete, and list ST-compatible JSONL chats.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P02",
+        "P03",
+        "D02"
+      ]
+    },
+    {
+      "id": "C02",
+      "group": "chat",
+      "name": "Chat transcript UI and composer",
+      "description": "Message list, wrapping, scrolling, text input, send/cancel controls.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P08",
+        "C01"
+      ]
+    },
+    {
+      "id": "C03",
+      "group": "chat",
+      "name": "Prompt assembly and core macros",
+      "description": "System prompt, description, personality, scenario, examples, history, {{char}}/{{user}} macros.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "D01",
+        "P05",
+        "C30"
+      ]
+    },
+    {
+      "id": "C04",
+      "group": "chat",
+      "name": "OpenAI-compatible streaming generation",
+      "description": "Chat completions over configurable base URL with SSE streaming and errors.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03",
+        "C39"
+      ]
+    },
+    {
+      "id": "C05",
+      "group": "chat",
+      "name": "Message actions",
+      "description": "Edit, delete, regenerate, and continue messages with persistence.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "C01",
+        "C02",
+        "C04"
+      ]
+    },
+    {
+      "id": "C06",
+      "group": "chat",
+      "name": "Context budgeting and trimming",
+      "description": "Estimate tokens, reserve output budget, and trim oldest history safely.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "C03",
+        "C04"
+      ]
+    },
+    {
+      "id": "C07",
+      "group": "chat",
+      "name": "Swipes and alternate responses",
+      "description": "Keep multiple candidate assistant replies per message.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C05"
+      ]
+    },
+    {
+      "id": "C08",
+      "group": "chat",
+      "name": "Branching and bookmarks",
+      "description": "Fork conversations and mark restore points.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C01"
+      ]
+    },
+    {
+      "id": "C09",
+      "group": "chat",
+      "name": "Group chats",
+      "description": "Multi-character conversations with turn order and group prompts.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C01",
+        "C03"
+      ]
+    },
+    {
+      "id": "C10",
+      "group": "chat",
+      "name": "Chat search",
+      "description": "Search message text across current and saved chats.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C01"
+      ]
+    },
+    {
+      "id": "C11",
+      "group": "chat",
+      "name": "Chat backups",
+      "description": "Timestamped automatic and manual chat backups with retention.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C01"
+      ]
+    },
+    {
+      "id": "C12",
+      "group": "chat",
+      "name": "Auto-continue",
+      "description": "Automatically request continuation when a reply is truncated.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C04"
+      ]
+    },
+    {
+      "id": "C13",
+      "group": "chat",
+      "name": "Impersonation",
+      "description": "Generate a user-side reply in the persona's voice.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03",
+        "C04"
+      ]
+    },
+    {
+      "id": "C14",
+      "group": "chat",
+      "name": "Author's note",
+      "description": "Inject adjustable-depth author instructions into the prompt.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C15",
+      "group": "chat",
+      "name": "Instruct mode",
+      "description": "Model-specific instruct formatting and stop sequences.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C16",
+      "group": "chat",
+      "name": "Context templates",
+      "description": "Configurable story-string and chat-context templates.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C17",
+      "group": "chat",
+      "name": "Markdown and rich formatting",
+      "description": "Markdown, code blocks, emphasis, and safe HTML rendering in messages.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02"
+      ]
+    },
+    {
+      "id": "C18",
+      "group": "chat",
+      "name": "Reasoning display",
+      "description": "Render model reasoning/thinking blocks separately.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C04"
+      ]
+    },
+    {
+      "id": "C19",
+      "group": "chat",
+      "name": "Tool calling",
+      "description": "Function/tool definitions, calls, and results in chat.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C04"
+      ]
+    },
+    {
+      "id": "C20",
+      "group": "chat",
+      "name": "Logprobs display",
+      "description": "Show token probabilities returned by supported backends.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C04"
+      ]
+    },
+    {
+      "id": "C21",
+      "group": "chat",
+      "name": "Attachments and inline images",
+      "description": "Attach files and display images in messages.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02",
+        "D11"
+      ]
+    },
+    {
+      "id": "C22",
+      "group": "chat",
+      "name": "Slash commands and STscript",
+      "description": "Command language, scripting, and automation hooks.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02",
+        "C03"
+      ]
+    },
+    {
+      "id": "C23",
+      "group": "chat",
+      "name": "Variables",
+      "description": "Local and global variables available to prompts and scripts.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C24",
+      "group": "chat",
+      "name": "Quick replies",
+      "description": "Reusable prompt snippets and command buttons.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02"
+      ]
+    },
+    {
+      "id": "C25",
+      "group": "chat",
+      "name": "Regex transformations",
+      "description": "Configurable input/output regex rewriting.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C26",
+      "group": "chat",
+      "name": "Summarize and memory",
+      "description": "Summarize old history to extend effective context.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03",
+        "C04"
+      ]
+    },
+    {
+      "id": "C27",
+      "group": "chat",
+      "name": "Vector storage and RAG",
+      "description": "Embed and retrieve relevant history or documents.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03",
+        "P07"
+      ]
+    },
+    {
+      "id": "C28",
+      "group": "chat",
+      "name": "Data bank",
+      "description": "Attach and retrieve document collections.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D11",
+        "C27"
+      ]
+    },
+    {
+      "id": "C29",
+      "group": "chat",
+      "name": "Persona manager",
+      "description": "Multiple user personas with descriptions and avatars.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P05",
+        "C03"
+      ]
+    },
+    {
+      "id": "C30",
+      "group": "chat",
+      "name": "User identity",
+      "description": "Persistent user name used in prompts and chat metadata.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P05"
+      ]
+    },
+    {
+      "id": "C31",
+      "group": "chat",
+      "name": "World Info engine",
+      "description": "Keyword-triggered lore injection with budgets and recursion.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C32",
+      "group": "chat",
+      "name": "World Info editor and import",
+      "description": "Create, edit, import, and export lorebooks.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C31"
+      ]
+    },
+    {
+      "id": "C33",
+      "group": "chat",
+      "name": "Exact tokenizer and token counter",
+      "description": "Model tokenizer integration and accurate prompt token counts.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C06"
+      ]
+    },
+    {
+      "id": "C34",
+      "group": "chat",
+      "name": "Prompt manager and presets",
+      "description": "Ordered prompt sections, enable/disable, and per-connection presets.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "C35",
+      "group": "chat",
+      "name": "Preset import and export",
+      "description": "Import/export prompt and sampler presets.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C34"
+      ]
+    },
+    {
+      "id": "C36",
+      "group": "chat",
+      "name": "Connection profiles",
+      "description": "Save and switch named API configurations.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P05",
+        "C04"
+      ]
+    },
+    {
+      "id": "C37",
+      "group": "chat",
+      "name": "Custom headers and proxy",
+      "description": "Extra HTTP headers, proxies, and custom certificate handling.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C04"
+      ]
+    },
+    {
+      "id": "C38",
+      "group": "chat",
+      "name": "Advanced sampler settings",
+      "description": "Top-k, top-p, repetition penalties, DRY, mirostat, and backend-specific samplers.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C04"
+      ]
+    },
+    {
+      "id": "C39",
+      "group": "chat",
+      "name": "Basic sampling controls",
+      "description": "Temperature, top-p, max tokens, and stream toggle.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P05"
+      ]
+    },
+    {
+      "id": "C40",
+      "group": "chat",
+      "name": "Prompt post-processing",
+      "description": "Extension prompt injection and final message rewriting.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C03"
+      ]
+    },
+    {
+      "id": "U01",
+      "group": "ui",
+      "name": "Themes and user CSS",
+      "description": "Built-in themes and user style overrides.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "U02",
+      "group": "ui",
+      "name": "Backgrounds",
+      "description": "Global, character, and chat backgrounds.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "U03",
+      "group": "ui",
+      "name": "Movable UI",
+      "description": "Rearrange and resize panels persistently.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "U04",
+      "group": "ui",
+      "name": "Keyboard shortcuts",
+      "description": "Configurable hotkeys for common actions.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "U05",
+      "group": "ui",
+      "name": "Welcome screen and responsive layout",
+      "description": "First-run guidance and adaptive narrow-window layout.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P08"
+      ]
+    },
+    {
+      "id": "U06",
+      "group": "ui",
+      "name": "Bulk message edit",
+      "description": "Edit or delete ranges of messages at once.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02"
+      ]
+    },
+    {
+      "id": "U07",
+      "group": "ui",
+      "name": "Character expressions and sprites",
+      "description": "Display emotion sprites tied to messages.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D02",
+        "C04"
+      ]
+    },
+    {
+      "id": "U08",
+      "group": "ui",
+      "name": "TTS and STT",
+      "description": "Text-to-speech playback and speech input.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02",
+        "P07"
+      ]
+    },
+    {
+      "id": "U09",
+      "group": "ui",
+      "name": "Image generation",
+      "description": "Generate illustrations from chat context.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02",
+        "P07"
+      ]
+    },
+    {
+      "id": "U10",
+      "group": "ui",
+      "name": "Image captioning",
+      "description": "Describe attached or generated images.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D11",
+        "P07"
+      ]
+    },
+    {
+      "id": "U11",
+      "group": "ui",
+      "name": "Chat translation",
+      "description": "Translate messages through configured providers.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C02",
+        "P07"
+      ]
+    },
+    {
+      "id": "U12",
+      "group": "ui",
+      "name": "Gallery browser",
+      "description": "Browse and manage generated or attached images.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D11"
+      ]
+    },
+    {
+      "id": "U13",
+      "group": "ui",
+      "name": "Stats dashboard",
+      "description": "Message, token, and usage statistics.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C01"
+      ]
+    },
+    {
+      "id": "U14",
+      "group": "ui",
+      "name": "Data Maid",
+      "description": "Bulk inspect and clean data files.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D01",
+        "C01"
+      ]
+    },
+    {
+      "id": "U15",
+      "group": "ui",
+      "name": "Backups manager",
+      "description": "Browse and restore chat and data backups.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C11"
+      ]
+    },
+    {
+      "id": "U16",
+      "group": "ui",
+      "name": "Global search",
+      "description": "Search characters, chats, and settings from one place.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "D02",
+        "C01"
+      ]
+    },
+    {
+      "id": "U17",
+      "group": "ui",
+      "name": "Extension manager",
+      "description": "Discover, enable, configure, and update extensions.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07"
+      ]
+    },
+    {
+      "id": "U18",
+      "group": "ui",
+      "name": "Plugin API",
+      "description": "Native plugin ABI and lifecycle hooks.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "U17"
+      ]
+    },
+    {
+      "id": "U19",
+      "group": "ui",
+      "name": "Token counter UI",
+      "description": "Inspect token counts for messages and prompts.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C33"
+      ]
+    },
+    {
+      "id": "B01",
+      "group": "backends",
+      "name": "Anthropic native API",
+      "description": "Messages API, streaming, and Anthropic-specific options.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03"
+      ]
+    },
+    {
+      "id": "B02",
+      "group": "backends",
+      "name": "Google Gemini API",
+      "description": "Gemini generateContent and streaming.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03"
+      ]
+    },
+    {
+      "id": "B03",
+      "group": "backends",
+      "name": "Text-completion backends",
+      "description": "Kobold, Ooba, llama.cpp, and compatible completion APIs.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03"
+      ]
+    },
+    {
+      "id": "B04",
+      "group": "backends",
+      "name": "NovelAI API",
+      "description": "NovelAI text generation and streaming.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03"
+      ]
+    },
+    {
+      "id": "B05",
+      "group": "backends",
+      "name": "AI Horde",
+      "description": "Crowdsourced generation backend.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03"
+      ]
+    },
+    {
+      "id": "B06",
+      "group": "backends",
+      "name": "Azure OpenAI",
+      "description": "Azure deployment URLs and authentication.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07",
+        "C03"
+      ]
+    },
+    {
+      "id": "B07",
+      "group": "backends",
+      "name": "OpenRouter features",
+      "description": "Provider routing, model listing, and OpenRouter-specific options.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C04"
+      ]
+    },
+    {
+      "id": "B08",
+      "group": "backends",
+      "name": "Embeddings backends",
+      "description": "OpenAI, Ollama, llama.cpp, and other embedding providers.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "C27"
+      ]
+    },
+    {
+      "id": "B09",
+      "group": "backends",
+      "name": "Speech backends",
+      "description": "Edge, Coqui, Silero, and system speech engines.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "U08"
+      ]
+    },
+    {
+      "id": "B10",
+      "group": "backends",
+      "name": "Image generation backends",
+      "description": "Stable Diffusion, ComfyUI, and compatible image APIs.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "U09"
+      ]
+    },
+    {
+      "id": "B11",
+      "group": "backends",
+      "name": "Translation backends",
+      "description": "Google, DeepL, and local translation providers.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "U11"
+      ]
+    },
+    {
+      "id": "B12",
+      "group": "backends",
+      "name": "Remote server and API mode",
+      "description": "Headless HTTP service exposing the core API.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P02",
+        "P07"
+      ]
+    },
+    {
+      "id": "B13",
+      "group": "backends",
+      "name": "Multi-user accounts and auth",
+      "description": "Per-user data isolation, login, and administration.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "B12"
+      ]
+    },
+    {
+      "id": "B14",
+      "group": "backends",
+      "name": "Host security",
+      "description": "Host whitelist, CORS, CSRF, and session hardening.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "B12"
+      ]
+    },
+    {
+      "id": "B15",
+      "group": "backends",
+      "name": "Web client",
+      "description": "Browser frontend for remote server mode.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "B12"
+      ]
+    },
+    {
+      "id": "O01",
+      "group": "operations",
+      "name": "File name sanitization and path safety",
+      "description": "Reject traversal, sanitize names, and keep all writes inside the data root.",
+      "critical": true,
+      "target": "0.1",
+      "status": "planned",
+      "depends_on": [
+        "P02"
+      ]
+    },
+    {
+      "id": "O02",
+      "group": "operations",
+      "name": "Backup and restore",
+      "description": "Manual and automatic backups of settings, cards, and chats.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P02"
+      ]
+    },
+    {
+      "id": "O03",
+      "group": "operations",
+      "name": "Update checker",
+      "description": "Check for new releases without auto-installing.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P07"
+      ]
+    },
+    {
+      "id": "O04",
+      "group": "operations",
+      "name": "Healthcheck and integrity",
+      "description": "Validate data files and expose service health.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "B12"
+      ]
+    },
+    {
+      "id": "O05",
+      "group": "operations",
+      "name": "Secret redaction",
+      "description": "Remove credentials and sensitive headers from logs and error dialogs.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "P04",
+        "P06"
+      ]
+    },
+    {
+      "id": "O06",
+      "group": "operations",
+      "name": "Plugin security sandbox",
+      "description": "Capability limits for third-party plugins.",
+      "critical": false,
+      "target": "later",
+      "status": "planned",
+      "depends_on": [
+        "U18"
+      ]
+    }
+  ]
+}

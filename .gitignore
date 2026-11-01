@@ -1,0 +1,19 @@
+# Original upstream checkout — reference only, never modified by the port.
+SillyTavern/
+
+# Build outputs
+SillyTavern_port/build/
+SillyTavern_port/sillytavern-port
+SillyTavern_port/.config
+SillyTavern_port/.config.old
+*.o
+*.a
+*.so
+
+# Local runtime data and logs
+SillyTavern_port/.local/
+*.log
+
+# Editor/OS noise
+.DS_Store
+*.swp
