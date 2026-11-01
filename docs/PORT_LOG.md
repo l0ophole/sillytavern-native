@@ -16,6 +16,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 |---|---|---|---|---|---|
 | P01 Build system and menuconfig | 01-stage-0-foundation.md | yes | yes | 3a04dfc | Skeleton CLI; GTK comes in stage 4 |
 | P02 XDG paths and atomic file I/O | 02-stage-1-core-platform.md | yes | yes | pending | XDG dirs, fsync+rename atomic writes, 0600 option |
+| P03 JSON serialization layer | 02-stage-1-core-platform.md | yes | yes | pending | nlohmann/json wrapper with contextual errors |
 
 ## Stages
 

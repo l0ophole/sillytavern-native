@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 2 |
+| Ported features | 3 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -93,7 +93,7 @@ feature IDs; names are in the same table.
 |---|---|:---:|---|---|---|---|
 | P01 | Build system and feature configuration | **yes** | v0.1 | ported | — | P02, P03, P04, P08, P11 |
 | P02 | XDG paths and atomic file I/O | **yes** | v0.1 | ported | P01 | B12, C01, D01, D02, D11, O01, O02, P04, P05, P09, P10 |
-| P03 | JSON serialization layer | **yes** | v0.1 | planned | P01 | C01, D01, P05, P07 |
+| P03 | JSON serialization layer | **yes** | v0.1 | ported | P01 | C01, D01, P05, P07 |
 | P04 | Logging and diagnostics | **yes** | v0.1 | planned | P01, P02 | O05, P07 |
 | P05 | Settings and preferences | **yes** | v0.1 | planned | P02, P03 | C03, C29, C30, C36, C39, P06 |
 | P06 | Credential storage | **yes** | v0.1 | planned | P05 | O05 |

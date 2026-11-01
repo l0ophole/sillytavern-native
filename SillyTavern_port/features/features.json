@@ -33,7 +33,7 @@
       "description": "Shared JSON parsing and serialization for cards, chats, settings, and API payloads.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P01"
       ]
