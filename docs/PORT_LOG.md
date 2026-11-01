@@ -20,6 +20,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | P04 Logging and diagnostics | 02-stage-1-core-platform.md | yes | yes | pending | Thread-safe file/stderr log with secret redaction |
 | P05 Settings and preferences | 02-stage-1-core-platform.md | yes | yes | pending | Defaults, clamping, unknown-key preservation, 0600 save |
 | P06 Credential storage | 02-stage-1-core-platform.md | yes | yes | pending | 0600 enforcement, secret masking, redaction check |
+| P07 HTTP/TLS and SSE transport | 02-stage-1-core-platform.md | yes | yes | pending | libcurl POST with TLS verification, cancellation, incremental SSE parser |
 
 ## Stages
 

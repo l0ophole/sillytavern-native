@@ -1,0 +1,44 @@
+#pragma once
+
+#include <atomic>
+#include <cstddef>
+#include <functional>
+#include <string>
+#include <vector>
+
+namespace st {
+
+struct HttpRequest {
+    std::string url;
+    std::vector<std::string> headers;
+    std::string body;
+    long timeout_seconds = 300;
+    long connect_timeout_seconds = 15;
+    bool follow_redirects = true;
+};
+
+struct HttpResponse {
+    long status = 0;
+    std::string body;
+    std::string error;
+    bool cancelled = false;
+};
+
+using HttpDataCallback = std::function<bool(const char* data, std::size_t size)>;
+
+class HttpClient {
+public:
+    HttpClient() = default;
+    ~HttpClient();
+
+    HttpClient(const HttpClient&) = delete;
+    HttpClient& operator=(const HttpClient&) = delete;
+
+    HttpResponse post(const HttpRequest& request, const HttpDataCallback& on_data = {});
+    void cancel();
+
+private:
+    std::atomic<bool> cancelled_{false};
+};
+
+}  // namespace st

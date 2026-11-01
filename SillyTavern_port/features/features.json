@@ -83,7 +83,7 @@
       "description": "libcurl HTTP client, TLS verification, streaming SSE line parser, cancellation.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P03",
         "P04"
