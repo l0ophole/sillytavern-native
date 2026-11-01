@@ -45,7 +45,7 @@
       "description": "Structured log file, severity levels, user-visible error reporting.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P01",
         "P02"
