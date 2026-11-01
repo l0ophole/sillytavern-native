@@ -11,7 +11,7 @@
       "description": "Make-based build, ncurses menuconfig, feature registry, generated feature header.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": []
     },
     {
