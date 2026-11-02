@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 7 |
+| Ported features | 8 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -215,7 +215,7 @@ feature IDs; names are in the same table.
 
 | ID | Feature | Critical | Plan | Status | Depends on | Required by |
 |---|---|:---:|---|---|---|---|
-| O01 | File name sanitization and path safety | **yes** | v0.1 | planned | P02 | — |
+| O01 | File name sanitization and path safety | **yes** | v0.1 | ported | P02 | — |
 | O02 | Backup and restore | no | later | planned | P02 | — |
 | O03 | Update checker | no | later | planned | P07 | — |
 | O04 | Healthcheck and integrity | no | later | planned | B12 | — |

@@ -1240,7 +1240,7 @@
       "description": "Reject traversal, sanitize names, and keep all writes inside the data root.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P02"
       ]
