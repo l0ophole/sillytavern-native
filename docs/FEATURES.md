@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 11 |
+| Ported features | 12 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -127,7 +127,7 @@ feature IDs; names are in the same table.
 |---|---|:---:|---|---|---|---|
 | C01 | Chat session storage and lifecycle | **yes** | v0.1 | ported | P02, P03 | C02, C05, C08, C09, C10, C11, D05, D09, D10, U13, U14, U16 |
 | C02 | Chat transcript UI and composer | **yes** | v0.1 | planned | P08, C01 | C05, C17, C21, C22, C24, U06, U08, U09, U11 |
-| C03 | Prompt assembly and core macros | **yes** | v0.1 | planned | D01, P05, C30 | B01, B02, B03, B04, B05, B06, C04, C06, C09, C13, C14, C15, C16, C22, C23, C25, C26, C27, C29, C31, C34, C40 |
+| C03 | Prompt assembly and core macros | **yes** | v0.1 | ported | D01, P05, C30 | B01, B02, B03, B04, B05, B06, C04, C06, C09, C13, C14, C15, C16, C22, C23, C25, C26, C27, C29, C31, C34, C40 |
 | C04 | OpenAI-compatible streaming generation | **yes** | v0.1 | planned | P07, C03, C39 | B07, C05, C06, C12, C13, C18, C19, C20, C26, C36, C37, C38, U07 |
 | C05 | Message actions | **yes** | v0.1 | planned | C01, C02, C04 | C07 |
 | C06 | Context budgeting and trimming | **yes** | v0.1 | planned | C03, C04 | C33 |

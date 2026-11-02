@@ -344,7 +344,7 @@
       "description": "System prompt, description, personality, scenario, examples, history, {{char}}/{{user}} macros.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "D01",
         "P05",
