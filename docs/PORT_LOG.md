@@ -22,6 +22,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | P06 Credential storage | 02-stage-1-core-platform.md | yes | yes | 5c56a5a | 0600 enforcement, secret masking, redaction check |
 | P07 HTTP/TLS and SSE transport | 02-stage-1-core-platform.md | yes | yes | 6311899 | libcurl POST with TLS verification, cancellation, incremental SSE parser |
 | O01 File name sanitization and path safety | 03-stage-2-data-compatibility.md | yes | yes | pending | Traversal rejection, control-char removal, UTF-8-safe length cap, safe_join containment |
+| D01 Character card parser | 03-stage-2-data-compatibility.md | yes | yes | pending | PNG tEXt chara/ccv3 with ccv3 precedence, V2/V3/legacy JSON, strict base64 |
 
 ## Stages
 

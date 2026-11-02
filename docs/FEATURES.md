@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 8 |
+| Ported features | 9 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -110,7 +110,7 @@ feature IDs; names are in the same table.
 
 | ID | Feature | Critical | Plan | Status | Depends on | Required by |
 |---|---|:---:|---|---|---|---|
-| D01 | Character card parser | **yes** | v0.1 | planned | P02, P03 | C03, D02, D04, D07, D08, D10, U14 |
+| D01 | Character card parser | **yes** | v0.1 | ported | P02, P03 | C03, D02, D04, D07, D08, D10, U14 |
 | D02 | Character library, import, avatars | **yes** | v0.1 | planned | D01, P02, P08 | C01, D03, D05, D06, U07, U16 |
 | D03 | Character editor | no | later | planned | D02 | — |
 | D04 | Character export | no | later | planned | D01 | — |

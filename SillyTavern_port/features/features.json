@@ -180,7 +180,7 @@
       "description": "Read PNG tEXt chara/ccv3, V2/V3 JSON, and legacy JSON cards.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P02",
         "P03"
