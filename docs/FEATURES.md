@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 13 |
+| Ported features | 14 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -163,7 +163,7 @@ feature IDs; names are in the same table.
 | C36 | Connection profiles | no | later | planned | P05, C04 | — |
 | C37 | Custom headers and proxy | no | later | planned | P07, C04 | — |
 | C38 | Advanced sampler settings | no | later | planned | C04 | — |
-| C39 | Basic sampling controls | **yes** | v0.1 | planned | P05 | C04 |
+| C39 | Basic sampling controls | **yes** | v0.1 | ported | P05 | C04 |
 | C40 | Prompt post-processing | no | later | planned | C03 | — |
 
 ### User interface and media

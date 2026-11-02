@@ -28,6 +28,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C30 User identity | 04-stage-3-prompting-generation.md | yes | yes | pending | Normalized persistent user name; settings integration |
 | C03 Prompt assembly and core macros | 04-stage-3-prompting-generation.md | yes | yes | pending | Ordered system sections, case-insensitive {{char}}/{{user}}/BOT/USER macros, role mapping, post-history instructions |
 | C06 Context budgeting and history trimming | 04-stage-3-prompting-generation.md | yes | yes | pending | Deterministic UTF-8 token estimate, newest-first trimming, greeting reservation, budget enforcement |
+| C39 Basic sampling controls | 04-stage-3-prompting-generation.md | yes | yes | pending | Temperature/top_p/max_tokens/stream clamps, settings mapping, request JSON |
 
 ## Stages
 
