@@ -14,9 +14,19 @@ struct PromptMessage {
     std::string content;
 };
 
+struct PromptParts {
+    std::vector<PromptMessage> leading_system;
+    std::vector<PromptMessage> history;
+    std::vector<PromptMessage> trailing_system;
+};
+
 std::string expand_macros(const std::string& text,
                           const std::string& character,
                           const std::string& user);
+
+PromptParts build_prompt_parts(const CharacterCard& card,
+                               const Settings& settings,
+                               const std::vector<ChatMessage>& history);
 
 std::vector<PromptMessage> build_prompt(const CharacterCard& card,
                                         const Settings& settings,

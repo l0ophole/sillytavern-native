@@ -5,6 +5,7 @@
 #include "core/paths.h"
 #include "core/settings.h"
 #include "ui/character_list.h"
+#include "ui/chat_view.h"
 
 #include <gtkmm.h>
 
@@ -33,8 +34,7 @@ private:
     Gtk::Button settings_button_;
     Gtk::Paned paned_;
     std::unique_ptr<CharacterList> character_list_;
-    Gtk::ScrolledWindow right_scroll_;
-    Gtk::Label right_placeholder_;
+    std::unique_ptr<ChatView> chat_view_;
     Gtk::Label status_;
     Gtk::Box root_;
 };

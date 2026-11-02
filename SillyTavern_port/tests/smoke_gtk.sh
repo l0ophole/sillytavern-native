@@ -21,3 +21,8 @@ if ! grep -q 'smoke: character loaded' <<<"$output"; then
     echo "smoke test failed: character or avatar was not loaded" >&2
     exit 1
 fi
+
+if ! grep -q 'smoke: chat round-trip' <<<"$output"; then
+    echo "smoke test failed: chat round-trip failed" >&2
+    exit 1
+fi

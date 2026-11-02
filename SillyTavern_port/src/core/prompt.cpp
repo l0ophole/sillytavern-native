@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 
 namespace st {
 namespace {
@@ -76,9 +77,9 @@ std::string expand_macros(const std::string& text,
     return result;
 }
 
-std::vector<PromptMessage> build_prompt(const CharacterCard& card,
-                                        const Settings& settings,
-                                        const std::vector<ChatMessage>& history) {
+PromptParts build_prompt_parts(const CharacterCard& card,
+                               const Settings& settings,
+                               const std::vector<ChatMessage>& history) {
     const std::string character = card.name.empty() ? "Character" : card.name;
     const std::string user = normalize_user_name(settings.user_name);
 
@@ -102,9 +103,9 @@ std::vector<PromptMessage> build_prompt(const CharacterCard& card,
                                      character, user));
     }
 
-    std::vector<PromptMessage> messages;
+    PromptParts parts;
     if (!system_text.empty()) {
-        messages.push_back(PromptMessage{"system", std::move(system_text)});
+        parts.leading_system.push_back(PromptMessage{"system", std::move(system_text)});
     }
 
     for (const ChatMessage& message : history) {
@@ -112,12 +113,32 @@ std::vector<PromptMessage> build_prompt(const CharacterCard& card,
             continue;
         }
         const char* role = message.is_system ? "system" : (message.is_user ? "user" : "assistant");
-        messages.push_back(PromptMessage{role, expand_macros(message.mes, character, user)});
+        parts.history.push_back(PromptMessage{role, expand_macros(message.mes, character, user)});
     }
 
     if (!card.post_history_instructions.empty()) {
-        messages.push_back(PromptMessage{
+        parts.trailing_system.push_back(PromptMessage{
             "system", expand_macros(card.post_history_instructions, character, user)});
+    }
+    return parts;
+}
+
+std::vector<PromptMessage> build_prompt(const CharacterCard& card,
+                                        const Settings& settings,
+                                        const std::vector<ChatMessage>& history) {
+    PromptParts parts = build_prompt_parts(card, settings, history);
+
+    std::vector<PromptMessage> messages;
+    messages.reserve(parts.leading_system.size() + parts.history.size() +
+                     parts.trailing_system.size());
+    for (PromptMessage& message : parts.leading_system) {
+        messages.push_back(std::move(message));
+    }
+    for (PromptMessage& message : parts.history) {
+        messages.push_back(std::move(message));
+    }
+    for (PromptMessage& message : parts.trailing_system) {
+        messages.push_back(std::move(message));
     }
     return messages;
 }

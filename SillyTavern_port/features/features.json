@@ -331,7 +331,7 @@
       "description": "Message list, wrapping, scrolling, text input, send/cancel controls.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P08",
         "C01"

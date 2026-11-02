@@ -28,18 +28,14 @@ MainWindow::MainWindow(st::Paths paths,
         *this, characters_, [this](const CharacterEntry& entry) {
             on_character_selected(entry);
         });
-
-    right_placeholder_.set_text("Select a character to start chatting");
-    right_placeholder_.set_margin_top(16);
-    right_placeholder_.set_margin_bottom(16);
-    right_placeholder_.set_margin_left(16);
-    right_placeholder_.set_margin_right(16);
-    right_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
-    right_scroll_.add(right_placeholder_);
+    chat_view_ = std::make_unique<ChatView>(
+        chats_, settings_, [this](const std::string& text) {
+            status_.set_text(text);
+        });
 
     paned_.set_position(320);
     paned_.pack1(*character_list_, true, false);
-    paned_.pack2(right_scroll_, true, false);
+    paned_.pack2(*chat_view_, true, false);
 
     status_.set_text("Ready");
     status_.set_halign(Gtk::ALIGN_START);
@@ -64,17 +60,14 @@ MainWindow::MainWindow(st::Paths paths,
 }
 
 void MainWindow::on_character_selected(const st::CharacterEntry& entry) {
-    std::string description = entry.card.description;
-    if (description.empty()) {
-        description = "No description.";
-    }
-    right_placeholder_.set_text(entry.card.name + "\n\n" + description);
+    chat_view_->set_character(entry);
     status_.set_text("Selected: " + entry.card.name);
 }
 
 void MainWindow::on_settings() {
     try {
         SettingsDialog dialog(*this, paths_, settings_, [this]() {
+            chat_view_->refresh_settings();
             status_.set_text("Settings saved");
         });
         dialog.run();

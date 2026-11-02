@@ -2,6 +2,8 @@
 
 #include "core/atomic_file.h"
 #include "core/base64.h"
+#include "core/chat_session.h"
+#include "core/identity.h"
 #include "core/json.h"
 #include "ui/avatar.h"
 #include "ui/main_window.h"
@@ -188,6 +190,28 @@ int run_smoke_test() {
             return 1;
         }
         std::cout << "smoke: character loaded\n";
+
+        st::Chat smoke_chat = chats.create(entry.card.name,
+                                           st::normalize_user_name(settings.user_name),
+                                           entry.card.first_mes);
+        st::ChatSession session(entry.card,
+                                settings,
+                                chats,
+                                entry.card.name,
+                                "smoke-roundtrip.jsonl",
+                                smoke_chat);
+        session.append_user("Hello from the smoke test.");
+        if (session.prompt_messages().empty()) {
+            std::cerr << "smoke: empty prompt\n";
+            return 1;
+        }
+        session.save();
+        const st::Chat loaded = chats.load(entry.card.name, "smoke-roundtrip.jsonl");
+        if (loaded.messages.size() != std::size_t(2)) {
+            std::cerr << "smoke: chat round-trip failed\n";
+            return 1;
+        }
+        std::cout << "smoke: chat round-trip\n";
 
         window.hide();
         return 0;
