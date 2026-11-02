@@ -7,6 +7,7 @@
 #include "core/prompt.h"
 #include "core/settings.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,13 @@ public:
     void append_user(const std::string& text);
     void append_assistant(const std::string& text);
     void save() const;
+
+    bool edit_message(std::size_t index, const std::string& text);
+    bool delete_message(std::size_t index);
+    bool regenerate();
+    bool can_continue() const;
+    std::string continue_prefix() const;
+    void append_to_last_assistant(const std::string& text);
 
 private:
     CharacterCard card_;

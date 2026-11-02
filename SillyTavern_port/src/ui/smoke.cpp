@@ -13,6 +13,7 @@
 #include <gtkmm/main.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -212,6 +213,96 @@ int run_smoke_test() {
             return 1;
         }
         std::cout << "smoke: chat round-trip\n";
+
+        st::Chat action_chat = chats.create(entry.card.name,
+                                            st::normalize_user_name(settings.user_name),
+                                            entry.card.first_mes);
+        st::ChatSession actions(entry.card,
+                                settings,
+                                chats,
+                                entry.card.name,
+                                "smoke-actions.jsonl",
+                                action_chat);
+        actions.append_user("Original user message");
+        actions.append_assistant("Original assistant reply");
+        if (!actions.edit_message(1, "Edited user message")) {
+            std::cerr << "smoke: edit failed\n";
+            return 1;
+        }
+        if (!actions.delete_message(2)) {
+            std::cerr << "smoke: delete failed\n";
+            return 1;
+        }
+        actions.append_assistant("Stale assistant reply");
+        if (!actions.regenerate()) {
+            std::cerr << "smoke: regenerate failed\n";
+            return 1;
+        }
+        actions.append_assistant("Fresh assistant reply");
+        actions.save();
+
+        const st::Chat reloaded = chats.load(entry.card.name, "smoke-actions.jsonl");
+        if (reloaded.messages.size() != std::size_t(3) ||
+            reloaded.messages[1].mes != "Edited user message" ||
+            reloaded.messages[2].mes != "Fresh assistant reply") {
+            std::cerr << "smoke: message actions round-trip failed\n";
+            return 1;
+        }
+        std::cout << "smoke: message actions\n";
+
+        if (const char* mock_base = std::getenv("ST_MOCK_BASE_URL")) {
+            st::Settings mock_settings = settings;
+            mock_settings.api_base_url = mock_base;
+            mock_settings.model = "mock";
+            mock_settings.stream = true;
+
+            st::CharacterEntry mock_entry;
+            mock_entry.id = "mock";
+            mock_entry.card.name = "MockBot";
+            mock_entry.card.system_prompt = "Test.";
+            mock_entry.card.first_mes = "Greeting.";
+
+            std::string ui_status;
+            ChatView view(chats, mock_settings, [&ui_status](const std::string& text) {
+                ui_status = text;
+            });
+            view.show_all();
+            view.set_character(mock_entry);
+            view.submit_message("Hi");
+
+            const gint64 stream_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (g_get_monotonic_time() < stream_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                if (!view.is_streaming() && ui_status != "Generating...") {
+                    break;
+                }
+                g_usleep(5000);
+            }
+
+            if (view.is_streaming()) {
+                std::cerr << "smoke: UI stream timed out\n";
+                return 1;
+            }
+            if (ui_status != "Ready") {
+                std::cerr << "smoke: UI stream status: " << ui_status << '\n';
+                return 1;
+            }
+
+            const std::vector<std::string> mock_chats = chats.list("MockBot");
+            if (mock_chats.empty()) {
+                std::cerr << "smoke: UI stream did not save a chat\n";
+                return 1;
+            }
+            const st::Chat streamed = chats.load("MockBot", mock_chats.back());
+            if (streamed.messages.size() != std::size_t(3) ||
+                streamed.messages.back().name != "MockBot" ||
+                streamed.messages.back().mes != "hello world") {
+                std::cerr << "smoke: UI stream reply mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: ui streaming\n";
+        }
 
         window.hide();
         return 0;

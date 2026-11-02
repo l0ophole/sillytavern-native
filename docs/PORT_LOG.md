@@ -26,6 +26,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | D02 Character library, import, avatars | 05-stage-4-gtk-ui.md | yes | yes | pending | Core scan/import/delete plus searchable GTK list, file import dialog, 48 px avatars, selection |
 | C01 Chat session storage and lifecycle | 03-stage-2-data-compatibility.md | yes | yes | bf2a586 | ST JSONL load/save/list/rename/delete, unknown-field preservation, traversal rejection |
 | C02 Chat transcript UI and composer | 05-stage-4-gtk-ui.md | yes | yes | pending | ChatSession prompt/request, transcript with macros, Enter-to-send composer, chat selector/new, threaded SSE streaming with cancel and partial-text retention |
+| C05 Message actions | 05-stage-4-gtk-ui.md | yes | yes | pending | Edit/delete/regenerate/continue core actions, transcript context menu, edit/confirm dialogs, continuation streaming |
 | C30 User identity | 04-stage-3-prompting-generation.md | yes | yes | e30b3ea | Normalized persistent user name; settings integration |
 | C03 Prompt assembly and core macros | 04-stage-3-prompting-generation.md | yes | yes | c59e8ce | Ordered system sections, case-insensitive {{char}}/{{user}}/BOT/USER macros, role mapping, post-history instructions |
 | C06 Context budgeting and history trimming | 04-stage-3-prompting-generation.md | yes | yes | ac10cc2 | Deterministic UTF-8 token estimate, newest-first trimming, greeting reservation, budget enforcement |

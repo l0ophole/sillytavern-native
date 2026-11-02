@@ -372,7 +372,7 @@
       "description": "Edit, delete, regenerate, and continue messages with persistence.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "C01",
         "C02",

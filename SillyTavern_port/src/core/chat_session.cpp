@@ -4,6 +4,7 @@
 #include "core/identity.h"
 
 #include <chrono>
+#include <cstddef>
 #include <ctime>
 #include <string>
 #include <utility>
@@ -29,6 +30,15 @@ ChatMessage make_message(const std::string& name, bool is_user, const std::strin
     message.send_date = utc_now();
     message.mes = text;
     return message;
+}
+
+std::size_t last_non_empty_index(const Chat& chat) {
+    for (std::size_t index = chat.messages.size(); index > 0; --index) {
+        if (!chat.messages[index - 1].mes.empty()) {
+            return index - 1;
+        }
+    }
+    return chat.messages.size();
 }
 
 }  // namespace
@@ -95,6 +105,57 @@ void ChatSession::append_assistant(const std::string& text) {
 
 void ChatSession::save() const {
     store_.save(character_, filename_, chat_);
+}
+
+bool ChatSession::edit_message(std::size_t index, const std::string& text) {
+    if (index >= chat_.messages.size()) {
+        return false;
+    }
+    chat_.messages[index].mes = text;
+    return true;
+}
+
+bool ChatSession::delete_message(std::size_t index) {
+    if (index >= chat_.messages.size()) {
+        return false;
+    }
+    chat_.messages.erase(chat_.messages.begin() + static_cast<std::ptrdiff_t>(index));
+    return true;
+}
+
+bool ChatSession::regenerate() {
+    if (chat_.messages.empty()) {
+        return false;
+    }
+    const ChatMessage& last = chat_.messages.back();
+    if (last.is_user || last.is_system) {
+        return false;
+    }
+    chat_.messages.pop_back();
+    return true;
+}
+
+bool ChatSession::can_continue() const {
+    const std::size_t index = last_non_empty_index(chat_);
+    if (index >= chat_.messages.size()) {
+        return false;
+    }
+    const ChatMessage& last = chat_.messages[index];
+    return !last.is_user && !last.is_system;
+}
+
+std::string ChatSession::continue_prefix() const {
+    if (!can_continue()) {
+        return {};
+    }
+    return chat_.messages[last_non_empty_index(chat_)].mes;
+}
+
+void ChatSession::append_to_last_assistant(const std::string& text) {
+    if (!can_continue()) {
+        return;
+    }
+    chat_.messages[last_non_empty_index(chat_)].mes += text;
 }
 
 }  // namespace st

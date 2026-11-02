@@ -9,10 +9,12 @@
 #include <glibmm/dispatcher.h>
 
 #include <functional>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace st {
 namespace ui {
@@ -26,6 +28,8 @@ public:
 
     void set_character(const st::CharacterEntry& entry);
     void refresh_settings();
+    void submit_message(const std::string& text);
+    bool is_streaming() const { return streaming_; }
 
 private:
     void on_send();
@@ -34,8 +38,14 @@ private:
     void on_chat_selected();
     void on_dispatcher();
     bool on_composer_key_press(GdkEventKey* event);
+    bool on_transcript_button_press(GdkEventButton* event);
 
-    void start_generation(st::OpenAiRequest request);
+    void on_edit_message();
+    void on_delete_message();
+    void on_regenerate();
+    void on_continue();
+
+    void start_generation(st::OpenAiRequest request, bool continue_mode = false);
     void finish_generation(const st::OpenAiResult& result);
     void stop_streaming();
 
@@ -47,6 +57,8 @@ private:
     void append_streaming_display();
     void scroll_to_end();
     void set_status(const std::string& text);
+    std::size_t message_index_at_offset(std::size_t offset) const;
+    Gtk::Window* top_window();
 
     st::ChatStore& chats_;
     st::Settings& settings_;
@@ -63,6 +75,17 @@ private:
     Gtk::ScrolledWindow transcript_scroll_;
     Gtk::TextView transcript_view_;
     Glib::RefPtr<Gtk::TextTag> header_tag_;
+    Gtk::Menu context_menu_;
+    Gtk::MenuItem edit_item_;
+    Gtk::MenuItem delete_item_;
+    Gtk::MenuItem regenerate_item_;
+    Gtk::MenuItem continue_item_;
+    struct MessageRange {
+        std::size_t begin = 0;
+        std::size_t end = 0;
+    };
+    std::vector<MessageRange> message_ranges_;
+    std::size_t context_index_ = 0;
     Gtk::ScrolledWindow composer_scroll_;
     Gtk::TextView composer_view_;
     Gtk::Box composer_row_;
@@ -79,6 +102,7 @@ private:
     st::OpenAiResult final_result_;
     bool streaming_ = false;
     std::string streaming_text_;
+    bool continue_mode_ = false;
     bool updating_selector_ = false;
 };
 

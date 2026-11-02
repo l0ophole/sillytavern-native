@@ -179,3 +179,138 @@ TEST(session_append_and_save_round_trip) {
     CHECK(!loaded.messages[2].is_user);
     CHECK_EQ(loaded.messages[2].mes, "Welcome, traveler.");
 }
+
+TEST(session_edit_preserves_extra_and_timestamp) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatMessage message;
+    message.name = "Traveler";
+    message.is_user = true;
+    message.send_date = "2026-11-01T00:00:01Z";
+    message.mes = "before";
+    message.extra["future_field"] = 7;
+    chat.messages.push_back(message);
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.edit_message(0, "after"));
+    const st::ChatMessage& edited = session.chat().messages[0];
+    CHECK_EQ(edited.mes, "after");
+    CHECK_EQ(edited.send_date, "2026-11-01T00:00:01Z");
+    CHECK(edited.is_user);
+    CHECK(!edited.is_system);
+    CHECK_EQ(edited.name, "Traveler");
+    CHECK_EQ(edited.extra["future_field"].get<int>(), 7);
+
+    CHECK(!session.edit_message(5, "nope"));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(1));
+    CHECK_EQ(session.chat().messages[0].mes, "after");
+}
+
+TEST(session_delete_and_regenerate_boundaries) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    for (int index = 0; index < 4; ++index) {
+        st::ChatMessage message;
+        message.name = (index % 2 == 0) ? "Traveler" : "Seraphina";
+        message.is_user = (index % 2 == 0);
+        message.send_date = "2026-11-01T00:00:01Z";
+        message.mes = "message " + std::to_string(index);
+        chat.messages.push_back(message);
+    }
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.delete_message(1));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(3));
+    CHECK_EQ(session.chat().messages[0].mes, "message 0");
+    CHECK_EQ(session.chat().messages[1].mes, "message 2");
+    CHECK_EQ(session.chat().messages[2].mes, "message 3");
+
+    CHECK(!session.delete_message(99));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(3));
+
+    CHECK(session.regenerate());
+    CHECK_EQ(session.chat().messages.size(), std::size_t(2));
+    CHECK_EQ(session.chat().messages.back().mes, "message 2");
+    CHECK(!session.regenerate());
+    CHECK_EQ(session.chat().messages.size(), std::size_t(2));
+
+    session.save();
+    const st::Chat loaded = store.load("Seraphina", "chat.jsonl");
+    CHECK_EQ(loaded.messages.size(), std::size_t(2));
+    CHECK_EQ(loaded.messages[0].mes, "message 0");
+    CHECK_EQ(loaded.messages[1].mes, "message 2");
+
+    st::Chat empty;
+    st::ChatSession empty_session(make_card(), settings, store, "Seraphina", "empty.jsonl", empty);
+    CHECK(!empty_session.regenerate());
+    CHECK(!empty_session.delete_message(0));
+}
+
+TEST(session_continue_requires_assistant_tail) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatMessage greeting;
+    greeting.name = "Seraphina";
+    greeting.mes = "Hello";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.mes = "Hi";
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.mes = "Welcome";
+    chat.messages = {greeting, user, assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.can_continue());
+    CHECK_EQ(session.continue_prefix(), "Welcome");
+    session.append_to_last_assistant(" friend");
+    CHECK_EQ(session.chat().messages.back().mes, "Welcome friend");
+    CHECK_EQ(session.chat().messages.size(), std::size_t(3));
+
+    st::Chat user_tail;
+    user_tail.metadata.user_name = "Traveler";
+    user_tail.metadata.character_name = "Seraphina";
+    user_tail.metadata.create_date = "2026-11-01T00:00:00Z";
+    user_tail.messages = {user};
+    st::ChatSession user_session(make_card(), settings, store, "Seraphina", "user.jsonl", user_tail);
+    CHECK(!user_session.can_continue());
+    CHECK(user_session.continue_prefix().empty());
+    user_session.append_to_last_assistant("ignored");
+    CHECK_EQ(user_session.chat().messages.back().mes, "Hi");
+
+    st::Chat trailing_empty;
+    trailing_empty.metadata.user_name = "Traveler";
+    trailing_empty.metadata.character_name = "Seraphina";
+    trailing_empty.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage empty_user;
+    empty_user.name = "Traveler";
+    empty_user.is_user = true;
+    empty_user.mes = "";
+    trailing_empty.messages = {greeting, empty_user};
+    st::ChatSession trailing_session(
+        make_card(), settings, store, "Seraphina", "trailing.jsonl", trailing_empty);
+    CHECK(trailing_session.can_continue());
+    CHECK_EQ(trailing_session.continue_prefix(), "Hello");
+}
