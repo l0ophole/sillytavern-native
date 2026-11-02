@@ -24,6 +24,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | O01 File name sanitization and path safety | 03-stage-2-data-compatibility.md | yes | yes | pending | Traversal rejection, control-char removal, UTF-8-safe length cap, safe_join containment |
 | D01 Character card parser | 03-stage-2-data-compatibility.md | yes | yes | pending | PNG tEXt chara/ccv3 with ccv3 precedence, V2/V3/legacy JSON, strict base64 |
 | D02 Character library, import, avatars | 03-stage-2-data-compatibility.md | partial | yes | pending | Core scan/import/delete complete; avatar UI in stage 4; status stays planned |
+| C01 Chat session storage and lifecycle | 03-stage-2-data-compatibility.md | yes | yes | pending | ST JSONL load/save/list/rename/delete, unknown-field preservation, traversal rejection |
 
 ## Stages
 

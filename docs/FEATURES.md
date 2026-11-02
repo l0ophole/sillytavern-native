@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 9 |
+| Ported features | 10 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -63,7 +63,6 @@ graph TD
     P08 --> D02
     P02 --> C01
     P03 --> C01
-    D02 --> C01
     P08 --> C02
     C01 --> C02
     D01 --> C03
@@ -111,7 +110,7 @@ feature IDs; names are in the same table.
 | ID | Feature | Critical | Plan | Status | Depends on | Required by |
 |---|---|:---:|---|---|---|---|
 | D01 | Character card parser | **yes** | v0.1 | ported | P02, P03 | C03, D02, D04, D07, D08, D10, U14 |
-| D02 | Character library, import, avatars | **yes** | v0.1 | planned | D01, P02, P08 | C01, D03, D05, D06, U07, U16 |
+| D02 | Character library, import, avatars | **yes** | v0.1 | planned | D01, P02, P08 | D03, D05, D06, U07, U16 |
 | D03 | Character editor | no | later | planned | D02 | — |
 | D04 | Character export | no | later | planned | D01 | — |
 | D05 | Alternate greetings | no | later | planned | D02, C01 | — |
@@ -126,7 +125,7 @@ feature IDs; names are in the same table.
 
 | ID | Feature | Critical | Plan | Status | Depends on | Required by |
 |---|---|:---:|---|---|---|---|
-| C01 | Chat session storage and lifecycle | **yes** | v0.1 | planned | P02, P03, D02 | C02, C05, C08, C09, C10, C11, D05, D09, D10, U13, U14, U16 |
+| C01 | Chat session storage and lifecycle | **yes** | v0.1 | ported | P02, P03 | C02, C05, C08, C09, C10, C11, D05, D09, D10, U13, U14, U16 |
 | C02 | Chat transcript UI and composer | **yes** | v0.1 | planned | P08, C01 | C05, C17, C21, C22, C24, U06, U08, U09, U11 |
 | C03 | Prompt assembly and core macros | **yes** | v0.1 | planned | D01, P05, C30 | B01, B02, B03, B04, B05, B06, C04, C06, C09, C13, C14, C15, C16, C22, C23, C25, C26, C27, C29, C31, C34, C40 |
 | C04 | OpenAI-compatible streaming generation | **yes** | v0.1 | planned | P07, C03, C39 | B07, C05, C06, C12, C13, C18, C19, C20, C26, C36, C37, C38, U07 |

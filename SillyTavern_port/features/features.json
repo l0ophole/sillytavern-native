@@ -318,11 +318,10 @@
       "description": "Create, load, save, rename, delete, and list ST-compatible JSONL chats.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P02",
-        "P03",
-        "D02"
+        "P03"
       ]
     },
     {
