@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -26,9 +27,13 @@ public:
              std::function<void(const std::string&)> on_status);
     ~ChatView() override;
 
-    void set_character(const st::CharacterEntry& entry);
+    bool set_character(const st::CharacterEntry& entry);
+    void clear();
     void refresh_settings();
-    void submit_message(const std::string& text);
+    bool submit_message(const std::string& text);
+    bool rename_current_chat(const std::string& name);
+    bool delete_current_chat();
+    const std::string& current_filename() const { return filename_; }
     bool is_streaming() const { return streaming_; }
 
 private:
@@ -36,6 +41,8 @@ private:
     void on_cancel();
     void on_new_chat();
     void on_chat_selected();
+    void on_rename_chat();
+    void on_delete_chat();
     void on_dispatcher();
     bool on_composer_key_press(GdkEventKey* event);
     bool on_transcript_button_press(GdkEventButton* event);
@@ -45,15 +52,18 @@ private:
     void on_regenerate();
     void on_continue();
 
-    void start_generation(st::OpenAiRequest request, bool continue_mode = false);
+    bool start_generation(st::OpenAiRequest request, bool continue_mode = false);
     void finish_generation(const st::OpenAiResult& result);
     void stop_streaming();
+    std::string collect_streaming_text();
 
-    void create_new_chat(bool announce);
-    void load_chat(const std::string& filename);
+    bool create_new_chat(bool announce);
+    bool load_chat(const std::string& filename);
     std::string new_chat_filename() const;
     void refresh_selector();
     void refresh_transcript();
+    void update_budget_label();
+    void update_controls();
     void append_streaming_display();
     void scroll_to_end();
     void set_status(const std::string& text);
@@ -65,13 +75,18 @@ private:
     std::function<void(const std::string&)> on_status_;
 
     st::CharacterCard card_;
-    std::string character_;
+    std::string character_key_;
+    std::string character_name_;
     std::string filename_;
     std::unique_ptr<st::ChatSession> session_;
+    std::optional<st::Chat> regenerate_backup_;
 
     Gtk::Box top_bar_;
     Gtk::ComboBoxText chat_selector_;
+    Gtk::Label budget_label_;
     Gtk::Button new_button_;
+    Gtk::Button rename_button_;
+    Gtk::Button delete_button_;
     Gtk::ScrolledWindow transcript_scroll_;
     Gtk::TextView transcript_view_;
     Glib::RefPtr<Gtk::TextTag> header_tag_;

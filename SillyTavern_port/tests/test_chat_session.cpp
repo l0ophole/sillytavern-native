@@ -261,6 +261,30 @@ TEST(session_delete_and_regenerate_boundaries) {
     CHECK(!empty_session.delete_message(0));
 }
 
+TEST(session_snapshot_restores_after_failed_action) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+
+    session.append_user("Keep me");
+    const st::Chat before = session.snapshot();
+    CHECK_EQ(session.chat().messages.size(), std::size_t(2));
+
+    session.append_assistant("Temporary reply");
+    CHECK(session.edit_message(0, "Changed greeting"));
+    CHECK(session.delete_message(2));
+    CHECK(session.delete_message(1));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(1));
+
+    session.restore(before);
+    CHECK_EQ(session.chat().messages.size(), std::size_t(2));
+    CHECK_EQ(session.chat().messages[0].mes, "Hello.");
+    CHECK_EQ(session.chat().messages[1].mes, "Keep me");
+}
+
 TEST(session_action_guards) {
     TempDir temp;
     st::ChatStore store(temp.path());

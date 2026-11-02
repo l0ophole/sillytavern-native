@@ -60,6 +60,17 @@ class Handler(BaseHTTPRequestHandler):
             self._write(body)
             return
 
+        if self.path.startswith("/slow-partial/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self._write(b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n')
+            time.sleep(2)
+            self._write(b'data: {"choices":[{"delta":{"content":" tail"}}]}\n\ndata: [DONE]\n\n')
+            return
+
         if self.path.startswith("/slow/"):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")

@@ -37,6 +37,9 @@ public:
     void append_assistant(const std::string& text);
     void save() const;
 
+    Chat snapshot() const;
+    void restore(Chat chat);
+
     bool edit_message(std::size_t index, const std::string& text);
     bool delete_message(std::size_t index);
     bool regenerate();

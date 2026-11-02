@@ -120,6 +120,14 @@ void ChatSession::save() const {
     store_.save(character_, filename_, chat_);
 }
 
+Chat ChatSession::snapshot() const {
+    return chat_;
+}
+
+void ChatSession::restore(Chat chat) {
+    chat_ = std::move(chat);
+}
+
 bool ChatSession::edit_message(std::size_t index, const std::string& text) {
     if (index >= chat_.messages.size()) {
         return false;

@@ -63,7 +63,22 @@ if ! grep -q 'smoke: message actions' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: chat lifecycle' <<<"$output"; then
+    echo "smoke test failed: chat lifecycle failed" >&2
+    exit 1
+fi
+
+if ! grep -q 'smoke: character delete' <<<"$output"; then
+    echo "smoke test failed: character delete failed" >&2
+    exit 1
+fi
+
 if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: ui streaming' <<<"$output"; then
     echo "smoke test failed: UI streaming failed" >&2
+    exit 1
+fi
+
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: partial on switch' <<<"$output"; then
+    echo "smoke test failed: partial on switch failed" >&2
     exit 1
 fi

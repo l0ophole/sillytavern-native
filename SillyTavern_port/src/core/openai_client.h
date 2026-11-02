@@ -37,6 +37,7 @@ class OpenAiClient {
 public:
     OpenAiResult generate(const OpenAiRequest& request, const OpenAiChunkCallback& on_chunk = {});
     void cancel();
+    void reset_cancel();
 
 private:
     HttpClient http_;

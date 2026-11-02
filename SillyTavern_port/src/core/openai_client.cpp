@@ -242,4 +242,8 @@ void OpenAiClient::cancel() {
     http_.cancel();
 }
 
+void OpenAiClient::reset_cancel() {
+    http_.reset_cancel();
+}
+
 }  // namespace st

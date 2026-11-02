@@ -12,6 +12,7 @@
 #include <glibmm/main.h>
 #include <gtkmm/main.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -250,6 +251,54 @@ int run_smoke_test() {
         }
         std::cout << "smoke: message actions\n";
 
+        {
+            std::string lifecycle_status;
+            ChatView lifecycle_view(chats, settings, [&lifecycle_status](const std::string& text) {
+                lifecycle_status = text;
+            });
+            lifecycle_view.show_all();
+            if (!lifecycle_view.set_character(entry)) {
+                std::cerr << "smoke: set_character failed\n";
+                return 1;
+            }
+            if (!lifecycle_view.rename_current_chat("renamed-chat") ||
+                lifecycle_view.current_filename() != "renamed-chat.jsonl") {
+                std::cerr << "smoke: rename_current_chat failed: " << lifecycle_status << '\n';
+                return 1;
+            }
+            const std::vector<std::string> after_rename = chats.list(entry.id);
+            if (std::find(after_rename.begin(), after_rename.end(), "renamed-chat.jsonl") ==
+                after_rename.end()) {
+                std::cerr << "smoke: renamed chat missing on disk\n";
+                return 1;
+            }
+            if (!lifecycle_view.delete_current_chat() ||
+                lifecycle_view.current_filename().empty() ||
+                lifecycle_view.current_filename() == "renamed-chat.jsonl") {
+                std::cerr << "smoke: delete_current_chat failed: " << lifecycle_status << '\n';
+                return 1;
+            }
+            std::cout << "smoke: chat lifecycle\n";
+        }
+
+        {
+            const st::CharacterEntry second = characters.import_file(source);
+            bool list_changed = false;
+            CharacterList list_widget(
+                window,
+                characters,
+                [](const st::CharacterEntry&) {},
+                [&list_changed]() { list_changed = true; });
+            list_widget.refresh();
+            list_widget.select_id(second.id);
+            if (!list_widget.delete_selected() || !list_changed ||
+                characters.list().size() != std::size_t(1)) {
+                std::cerr << "smoke: character delete failed\n";
+                return 1;
+            }
+            std::cout << "smoke: character delete\n";
+        }
+
         if (const char* mock_base = std::getenv("ST_MOCK_BASE_URL")) {
             st::Settings mock_settings = settings;
             mock_settings.api_base_url = mock_base;
@@ -289,12 +338,12 @@ int run_smoke_test() {
                 return 1;
             }
 
-            const std::vector<std::string> mock_chats = chats.list("MockBot");
+            const std::vector<std::string> mock_chats = chats.list("mock");
             if (mock_chats.empty()) {
                 std::cerr << "smoke: UI stream did not save a chat\n";
                 return 1;
             }
-            const st::Chat streamed = chats.load("MockBot", mock_chats.back());
+            const st::Chat streamed = chats.load("mock", mock_chats.back());
             if (streamed.messages.size() != std::size_t(3) ||
                 streamed.messages.back().name != "MockBot" ||
                 streamed.messages.back().mes != "hello world") {
@@ -302,6 +351,43 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: ui streaming\n";
+
+            st::Settings slow_settings = mock_settings;
+            slow_settings.api_base_url = std::string(mock_base) + "/slow-partial";
+
+            st::CharacterEntry slow_entry;
+            slow_entry.id = "slow-bot";
+            slow_entry.card.name = "SlowBot";
+            slow_entry.card.system_prompt = "Test.";
+            slow_entry.card.first_mes = "Wait.";
+
+            ChatView slow_view(chats, slow_settings, [](const std::string&) {});
+            slow_view.show_all();
+            slow_view.set_character(slow_entry);
+            slow_view.submit_message("Interrupt me");
+
+            const gint64 chunk_wait = g_get_monotonic_time() + 250 * 1000;
+            while (g_get_monotonic_time() < chunk_wait) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(5000);
+            }
+
+            slow_view.set_character(mock_entry);
+
+            const std::vector<std::string> slow_chats = chats.list("slow-bot");
+            if (slow_chats.empty()) {
+                std::cerr << "smoke: slow-bot chat missing\n";
+                return 1;
+            }
+            const st::Chat partial_chat = chats.load("slow-bot", slow_chats.back());
+            if (partial_chat.messages.size() != std::size_t(3) ||
+                partial_chat.messages.back().name != "SlowBot" ||
+                partial_chat.messages.back().mes != "partial") {
+                std::cerr << "smoke: partial on switch mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: partial on switch\n";
         }
 
         window.hide();

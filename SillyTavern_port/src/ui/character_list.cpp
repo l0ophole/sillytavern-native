@@ -11,11 +11,13 @@ namespace ui {
 
 CharacterList::CharacterList(Gtk::Window& parent,
                              st::CharacterStore& store,
-                             std::function<void(const CharacterEntry&)> on_selected)
+                             std::function<void(const CharacterEntry&)> on_selected,
+                             std::function<void()> on_changed)
     : Gtk::Box(Gtk::ORIENTATION_VERTICAL),
       parent_(parent),
       store_(store),
-      on_selected_(std::move(on_selected)) {
+      on_selected_(std::move(on_selected)),
+      on_changed_(std::move(on_changed)) {
     header_.set_spacing(6);
     header_.set_margin_top(6);
     header_.set_margin_bottom(6);
@@ -28,9 +30,14 @@ CharacterList::CharacterList(Gtk::Window& parent,
     import_button_.set_label("Import");
     import_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &CharacterList::on_import_clicked));
+    delete_button_.set_label("Delete");
+    delete_button_.set_sensitive(false);
+    delete_button_.signal_clicked().connect(
+        sigc::mem_fun(*this, &CharacterList::on_delete_clicked));
 
     header_.pack_start(search_, Gtk::PACK_EXPAND_WIDGET);
     header_.pack_start(import_button_, Gtk::PACK_SHRINK);
+    header_.pack_start(delete_button_, Gtk::PACK_SHRINK);
 
     list_.set_selection_mode(Gtk::SELECTION_SINGLE);
     list_.signal_row_selected().connect(
@@ -55,12 +62,25 @@ void CharacterList::select_first() {
     }
 }
 
+void CharacterList::select_id(const std::string& id) {
+    for (std::size_t index = 0; index < visible_.size(); ++index) {
+        if (visible_[index].id == id) {
+            if (Gtk::ListBoxRow* row = list_.get_row_at_index(static_cast<int>(index))) {
+                list_.select_row(*row);
+            }
+            return;
+        }
+    }
+    select_first();
+}
+
 void CharacterList::apply_filter() {
     visible_ = filter_characters(all_, search_.get_text());
     rebuild();
 }
 
 void CharacterList::rebuild() {
+    delete_button_.set_sensitive(false);
     for (Gtk::Widget* child : list_.get_children()) {
         list_.remove(*child);
     }
@@ -118,9 +138,12 @@ void CharacterList::on_import_clicked() {
     }
 
     try {
-        store_.import_file(dialog.get_filename());
+        const CharacterEntry imported = store_.import_file(dialog.get_filename());
         refresh();
-        select_first();
+        select_id(imported.id);
+        if (on_changed_) {
+            on_changed_();
+        }
     } catch (const std::exception& error) {
         Gtk::MessageDialog message(parent_, "Import failed", false, Gtk::MESSAGE_ERROR,
                                    Gtk::BUTTONS_OK, true);
@@ -129,7 +152,8 @@ void CharacterList::on_import_clicked() {
     }
 }
 
-void CharacterList::on_row_selected(Gtk::ListBoxRow* row) {
+void CharacterList::on_delete_clicked() {
+    Gtk::ListBoxRow* row = list_.get_selected_row();
     if (row == nullptr) {
         return;
     }
@@ -137,6 +161,63 @@ void CharacterList::on_row_selected(Gtk::ListBoxRow* row) {
     if (index < 0 || static_cast<std::size_t>(index) >= visible_.size()) {
         return;
     }
+    const CharacterEntry entry = visible_[static_cast<std::size_t>(index)];
+
+    Gtk::MessageDialog confirm(parent_,
+                               "Delete character?",
+                               false,
+                               Gtk::MESSAGE_QUESTION,
+                               Gtk::BUTTONS_OK_CANCEL,
+                               true);
+    confirm.set_secondary_text("Delete " + entry.card.name +
+                               "? Existing chats will remain on disk.");
+    if (confirm.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    delete_selected();
+}
+
+bool CharacterList::delete_selected() {
+    Gtk::ListBoxRow* row = list_.get_selected_row();
+    if (row == nullptr) {
+        return false;
+    }
+    const int index = row->get_index();
+    if (index < 0 || static_cast<std::size_t>(index) >= visible_.size()) {
+        return false;
+    }
+    const std::string id = visible_[static_cast<std::size_t>(index)].id;
+
+    try {
+        store_.remove(id);
+        refresh();
+        if (!visible_.empty()) {
+            select_first();
+        }
+        if (on_changed_) {
+            on_changed_();
+        }
+        return true;
+    } catch (const std::exception& error) {
+        Gtk::MessageDialog message(parent_, "Delete failed", false, Gtk::MESSAGE_ERROR,
+                                   Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+        return false;
+    }
+}
+
+void CharacterList::on_row_selected(Gtk::ListBoxRow* row) {
+    if (row == nullptr) {
+        delete_button_.set_sensitive(false);
+        return;
+    }
+    const int index = row->get_index();
+    if (index < 0 || static_cast<std::size_t>(index) >= visible_.size()) {
+        delete_button_.set_sensitive(false);
+        return;
+    }
+    delete_button_.set_sensitive(true);
     if (on_selected_) {
         on_selected_(visible_[static_cast<std::size_t>(index)]);
     }

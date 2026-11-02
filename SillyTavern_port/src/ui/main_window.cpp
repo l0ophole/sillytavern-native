@@ -25,8 +25,15 @@ MainWindow::MainWindow(st::Paths paths,
     set_titlebar(header_);
 
     character_list_ = std::make_unique<CharacterList>(
-        *this, characters_, [this](const CharacterEntry& entry) {
+        *this,
+        characters_,
+        [this](const CharacterEntry& entry) {
             on_character_selected(entry);
+        },
+        [this]() {
+            if (character_list_->empty()) {
+                chat_view_->clear();
+            }
         });
     chat_view_ = std::make_unique<ChatView>(
         chats_, settings_, [this](const std::string& text) {
@@ -54,14 +61,19 @@ MainWindow::MainWindow(st::Paths paths,
         sigc::mem_fun(*this, &MainWindow::on_settings));
 
     character_list_->refresh();
-    character_list_->select_first();
+    if (character_list_->empty()) {
+        chat_view_->clear();
+    } else {
+        character_list_->select_first();
+    }
 
     show_all_children();
 }
 
 void MainWindow::on_character_selected(const st::CharacterEntry& entry) {
-    chat_view_->set_character(entry);
-    status_.set_text("Selected: " + entry.card.name);
+    if (chat_view_->set_character(entry)) {
+        status_.set_text("Selected: " + entry.card.name);
+    }
 }
 
 void MainWindow::on_settings() {
