@@ -7,10 +7,14 @@ BUILD := build
 NCURSES_LIBS := $(shell pkg-config --libs ncursesw 2>/dev/null || echo -lncurses)
 CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 CORE_LIBS := $(CURL_LIBS) -pthread
+GTKMM_CFLAGS := $(shell pkg-config --cflags gtkmm-3.0 2>/dev/null)
+GTKMM_LIBS := $(shell pkg-config --libs gtkmm-3.0 2>/dev/null)
 
 CORE_SRCS := $(wildcard src/core/*.cpp)
 CORE_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(CORE_SRCS))
 CORE_LIB := $(BUILD)/libstcore.a
+UI_SRCS := $(wildcard src/ui/*.cpp)
+UI_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(UI_SRCS))
 TEST_SRCS := $(wildcard tests/test_*.cpp)
 TEST_OBJS := $(patsubst tests/%.cpp,$(BUILD)/tests/%.o,$(TEST_SRCS))
 
@@ -36,6 +40,14 @@ $(BUILD)/core/%.o: src/core/%.cpp | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+.PHONY: check-gtkmm
+check-gtkmm:
+	@pkg-config --exists gtkmm-3.0 || { echo "gtkmm-3.0 not found; install gtkmm3 (Arch) or gtkmm3-dev (Alpine)" >&2; exit 1; }
+
+$(BUILD)/ui/%.o: src/ui/%.cpp | $(BUILD) check-gtkmm
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(GTKMM_CFLAGS) -c $< -o $@
+
 $(CORE_LIB): $(CORE_OBJS)
 	$(AR) rcs $@ $^
 
@@ -43,8 +55,8 @@ $(BUILD)/tests/%.o: tests/%.cpp | $(BUILD)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -Itests -c $< -o $@
 
-$(BUILD)/sillytavern-port: src/main.cpp $(BUILD)/features.h $(CORE_LIB) | $(BUILD)
-	$(CXX) $(CXXFLAGS) src/main.cpp $(CORE_LIB) -o $@ $(CORE_LIBS)
+$(BUILD)/sillytavern-port: src/main.cpp $(UI_OBJS) $(BUILD)/features.h $(CORE_LIB) | check-gtkmm
+	$(CXX) $(CXXFLAGS) $(GTKMM_CFLAGS) src/main.cpp $(UI_OBJS) $(CORE_LIB) -o $@ $(CORE_LIBS) $(GTKMM_LIBS)
 
 $(BUILD)/run_tests: $(TEST_OBJS) $(CORE_LIB) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(TEST_OBJS) $(CORE_LIB) -o $@ $(CORE_LIBS)
@@ -53,7 +65,7 @@ test: $(BUILD)/run_tests
 	./$(BUILD)/run_tests
 
 smoke: $(BUILD)/sillytavern-port
-	@echo "smoke: not available until the GTK UI stage"
+	./tests/smoke_gtk.sh
 
 menuconfig: $(BUILD)/menuconfig
 	./$(BUILD)/menuconfig
@@ -74,4 +86,4 @@ help:
 	@echo "  make smoke        run the GUI smoke test (GTK stage)"
 	@echo "  make clean        remove build artifacts"
 
--include $(wildcard $(BUILD)/core/*.d $(BUILD)/tests/*.d)
+-include $(wildcard $(BUILD)/core/*.d $(BUILD)/tests/*.d $(BUILD)/ui/*.d)

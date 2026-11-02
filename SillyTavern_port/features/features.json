@@ -96,7 +96,7 @@
       "description": "Main window, header bar, menus, panels, dialogs, GTK main-loop integration.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P01"
       ]

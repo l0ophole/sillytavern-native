@@ -30,6 +30,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C06 Context budgeting and history trimming | 04-stage-3-prompting-generation.md | yes | yes | ac10cc2 | Deterministic UTF-8 token estimate, newest-first trimming, greeting reservation, budget enforcement |
 | C39 Basic sampling controls | 04-stage-3-prompting-generation.md | yes | yes | 0b897b5 | Temperature/top_p/max_tokens/stream clamps, settings mapping, request JSON |
 | C04 OpenAI-compatible streaming client | 04-stage-3-prompting-generation.md | yes | yes | f6fcff8 | SSE delta streaming, non-streaming fallback, error mapping, cancellation, mock-server integration tests |
+| P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | pending | GTK3 window, paned layout, header/settings dialog, status bar, Xvfb smoke harness |
 
 ## Stages
 
