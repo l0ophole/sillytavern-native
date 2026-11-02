@@ -27,6 +27,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C01 Chat session storage and lifecycle | 03-stage-2-data-compatibility.md | yes | yes | bf2a586 | ST JSONL load/save/list/rename/delete, unknown-field preservation, traversal rejection |
 | C30 User identity | 04-stage-3-prompting-generation.md | yes | yes | pending | Normalized persistent user name; settings integration |
 | C03 Prompt assembly and core macros | 04-stage-3-prompting-generation.md | yes | yes | pending | Ordered system sections, case-insensitive {{char}}/{{user}}/BOT/USER macros, role mapping, post-history instructions |
+| C06 Context budgeting and history trimming | 04-stage-3-prompting-generation.md | yes | yes | pending | Deterministic UTF-8 token estimate, newest-first trimming, greeting reservation, budget enforcement |
 
 ## Stages
 

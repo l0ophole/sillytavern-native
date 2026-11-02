@@ -386,10 +386,10 @@
       "description": "Estimate tokens, reserve output budget, and trim oldest history safely.",
       "critical": true,
       "target": "0.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "C03",
-        "C04"
+        "P05"
       ]
     },
     {
