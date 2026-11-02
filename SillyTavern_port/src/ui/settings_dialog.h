@@ -19,7 +19,7 @@ public:
 
 private:
     void load();
-    void store();
+    st::Settings build_settings() const;
     void on_response(int response) override;
 
     const st::Paths& paths_;

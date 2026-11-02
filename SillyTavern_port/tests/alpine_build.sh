@@ -20,10 +20,12 @@ docker run --rm \
         cp -a /src /work
         cd /work
         rm -rf build .config
-        make
+        make -j"$(nproc)"
         echo "alpine: build ok"
-        make test
+        make -j"$(nproc)" test
         echo "alpine: tests ok"
+        ./tests/integration_openai.sh
+        echo "alpine: integration ok"
         make smoke
         echo "alpine: smoke ok"
     '

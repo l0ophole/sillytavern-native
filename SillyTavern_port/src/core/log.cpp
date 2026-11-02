@@ -89,6 +89,17 @@ void log_init(const std::filesystem::path& log_file, bool also_stderr) {
     if (!log_stream()) {
         throw std::runtime_error("cannot open log file " + log_file.string());
     }
+    std::error_code perm_error;
+    std::filesystem::permissions(log_file,
+                                 std::filesystem::perms::owner_read |
+                                     std::filesystem::perms::owner_write,
+                                 std::filesystem::perm_options::replace,
+                                 perm_error);
+    if (perm_error) {
+        log_stream().close();
+        throw std::runtime_error("cannot secure log file " + log_file.string() + ": " +
+                                 perm_error.message());
+    }
     log_stderr() = also_stderr;
 }
 

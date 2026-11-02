@@ -1,6 +1,7 @@
 #include "ui/character_list.h"
 
 #include "core/character_filter.h"
+#include "core/log.h"
 #include "ui/avatar.h"
 
 #include <exception>
@@ -145,6 +146,7 @@ void CharacterList::on_import_clicked() {
             on_changed_();
         }
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("character import failed: ") + error.what());
         Gtk::MessageDialog message(parent_, "Import failed", false, Gtk::MESSAGE_ERROR,
                                    Gtk::BUTTONS_OK, true);
         message.set_secondary_text(error.what());
@@ -199,6 +201,7 @@ bool CharacterList::delete_selected() {
         }
         return true;
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("character delete failed: ") + error.what());
         Gtk::MessageDialog message(parent_, "Delete failed", false, Gtk::MESSAGE_ERROR,
                                    Gtk::BUTTONS_OK, true);
         message.set_secondary_text(error.what());

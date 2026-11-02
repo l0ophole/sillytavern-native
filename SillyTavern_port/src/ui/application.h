@@ -29,6 +29,7 @@ private:
     std::unique_ptr<st::CharacterStore> characters_;
     std::unique_ptr<st::ChatStore> chats_;
     std::unique_ptr<MainWindow> window_;
+    int startup_exit_code_ = 0;
 };
 
 }  // namespace ui

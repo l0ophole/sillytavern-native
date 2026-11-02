@@ -1,7 +1,10 @@
 #include "ui/settings_dialog.h"
 
+#include "core/log.h"
+
 #include <exception>
 #include <string>
+#include <utility>
 
 namespace st {
 namespace ui {
@@ -102,19 +105,21 @@ void SettingsDialog::load() {
     timeout_.set_value(settings_.request_timeout_seconds);
 }
 
-void SettingsDialog::store() {
-    settings_.api_base_url = base_url_.get_text();
-    settings_.api_key = api_key_.get_text();
-    settings_.model = model_.get_text();
-    settings_.temperature = temperature_.get_value();
-    settings_.top_p = top_p_.get_value();
-    settings_.max_tokens = max_tokens_.get_value_as_int();
-    settings_.context_size = context_size_.get_value_as_int();
-    settings_.user_name = user_name_.get_text();
-    settings_.system_prompt = system_prompt_.get_buffer()->get_text();
-    settings_.stream = stream_.get_active();
-    settings_.request_timeout_seconds = timeout_.get_value_as_int();
-    settings_.validate();
+st::Settings SettingsDialog::build_settings() const {
+    st::Settings candidate = settings_;
+    candidate.api_base_url = base_url_.get_text();
+    candidate.api_key = api_key_.get_text();
+    candidate.model = model_.get_text();
+    candidate.temperature = temperature_.get_value();
+    candidate.top_p = top_p_.get_value();
+    candidate.max_tokens = max_tokens_.get_value_as_int();
+    candidate.context_size = context_size_.get_value_as_int();
+    candidate.user_name = user_name_.get_text();
+    candidate.system_prompt = system_prompt_.get_buffer()->get_text();
+    candidate.stream = stream_.get_active();
+    candidate.request_timeout_seconds = timeout_.get_value_as_int();
+    candidate.validate();
+    return candidate;
 }
 
 void SettingsDialog::on_response(int response) {
@@ -123,17 +128,21 @@ void SettingsDialog::on_response(int response) {
         return;
     }
 
-    store();
     try {
-        settings_.save(paths_.settings_file);
+        st::Settings candidate = build_settings();
+        candidate.save(paths_.settings_file);
+        settings_ = std::move(candidate);
+        st::log_set_redactions({settings_.api_key});
         if (on_saved_) {
             on_saved_();
         }
         hide();
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("settings save failed: ") + error.what());
         Gtk::MessageDialog message(*this, "Cannot save settings", false,
                                    Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
-        message.set_secondary_text(error.what());
+        message.set_secondary_text(
+            st::redact_secrets(error.what(), {settings_.api_key, api_key_.get_text()}));
         message.run();
     }
 }

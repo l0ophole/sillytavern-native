@@ -1,6 +1,7 @@
 #include "ui/chat_view.h"
 
 #include "core/identity.h"
+#include "core/log.h"
 #include "core/names.h"
 #include "core/prompt.h"
 
@@ -205,6 +206,7 @@ bool ChatView::submit_message(const std::string& text) {
         session_->append_user(text);
         session_->save();
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat save failed: ") + error.what());
         session_->restore(before);
         refresh_transcript();
         set_status(std::string("Save error: ") + error.what());
@@ -300,6 +302,7 @@ bool ChatView::rename_current_chat(const std::string& name) {
         set_status("Renamed to " + filename_);
         return true;
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat rename failed: ") + error.what());
         set_status(std::string("Rename error: ") + error.what());
         return false;
     }
@@ -334,6 +337,7 @@ bool ChatView::delete_current_chat() {
     try {
         chats_.remove(character_key_, removed);
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat delete failed: ") + error.what());
         set_status(std::string("Delete error: ") + error.what());
         return false;
     }
@@ -449,6 +453,7 @@ void ChatView::on_edit_message() {
         refresh_transcript();
         set_status("Message edited");
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("message edit save failed: ") + error.what());
         session_->restore(before);
         refresh_transcript();
         set_status(std::string("Save error: ") + error.what());
@@ -483,6 +488,8 @@ void ChatView::on_delete_message() {
         refresh_transcript();
         set_status("Message deleted");
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("message delete save failed: ") + error.what());
         session_->restore(before);
         refresh_transcript();
         set_status(std::string("Save error: ") + error.what());
@@ -553,6 +560,8 @@ bool ChatView::start_generation(st::OpenAiRequest request, bool continue_mode) {
         });
         return true;
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("generation start failed: ") + error.what());
         streaming_ = false;
         continue_mode_ = false;
         client_.reset();
@@ -580,6 +589,8 @@ void ChatView::finish_generation(const st::OpenAiResult& result) {
                 }
                 session_->save();
             } catch (const std::exception& error) {
+                st::log_write(st::LogLevel::Error,
+                              std::string("assistant save failed: ") + error.what());
                 session_->restore(regenerate_backup_.has_value() ? *regenerate_backup_ : before);
                 save_error = std::string("Save error: ") + error.what();
             }
@@ -601,6 +612,7 @@ void ChatView::finish_generation(const st::OpenAiResult& result) {
     } else if (result.cancelled) {
         set_status("Cancelled");
     } else if (!result.error.empty()) {
+        st::log_write(st::LogLevel::Error, std::string("generation failed: ") + result.error);
         set_status(std::string("Error: ") + result.error);
     } else {
         set_status("Ready");
@@ -645,6 +657,8 @@ void ChatView::stop_streaming() {
                 }
                 session_->save();
             } catch (const std::exception& error) {
+                st::log_write(st::LogLevel::Error,
+                              std::string("partial save failed: ") + error.what());
                 session_->restore(regenerate_backup_.has_value() ? *regenerate_backup_ : before);
                 set_status(std::string("Save error: ") + error.what());
             }
@@ -684,6 +698,7 @@ bool ChatView::create_new_chat(bool announce) {
         }
         return true;
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat create failed: ") + error.what());
         session_.reset();
         filename_.clear();
         refresh_selector();
@@ -707,6 +722,7 @@ bool ChatView::load_chat(const std::string& filename) {
         set_status("Loaded " + filename);
         return true;
     } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + error.what());
         session_.reset();
         filename_.clear();
         refresh_selector();
@@ -818,7 +834,7 @@ void ChatView::scroll_to_end() {
 
 void ChatView::set_status(const std::string& text) {
     if (on_status_) {
-        on_status_(text);
+        on_status_(st::redact_secrets(text, {settings_.api_key}));
     }
 }
 

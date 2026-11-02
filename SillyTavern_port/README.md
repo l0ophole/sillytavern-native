@@ -7,13 +7,16 @@ single-user core-chat MVP; the full feature set is tracked in
 ## v0.1 scope
 
 - Native GTK3/gtkmm application under Xorg.
-- SillyTavern-compatible character card import (PNG V2/V3 and JSON).
-- OpenAI-compatible streaming chat completions.
-- SillyTavern-compatible JSONL chat storage.
-- Message editing, deletion, regeneration, and continuation.
+- SillyTavern-compatible character card import and deletion (PNG V2/V3 and JSON).
+- OpenAI-compatible streaming chat completions with partial-reply retention.
+- SillyTavern-compatible JSONL chat storage with create, switch, rename, and delete.
+- Message editing, deletion, regeneration, and continuation with context-budget display.
 - Feature configuration where unported features are visible but disabled.
 
 The original JavaScript frontend is not embedded. No Node.js or WebKit is used.
+Local file I/O runs synchronously on the UI thread with size caps (1 MiB for
+`settings.json`, 64 MiB for character cards and chat logs); background file I/O
+is deferred post-v0.1.
 
 ## Build dependencies
 

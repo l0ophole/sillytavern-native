@@ -1,5 +1,6 @@
 #include "ui/main_window.h"
 
+#include "core/log.h"
 #include "ui/settings_dialog.h"
 
 #include <string>
@@ -37,7 +38,7 @@ MainWindow::MainWindow(st::Paths paths,
         });
     chat_view_ = std::make_unique<ChatView>(
         chats_, settings_, [this](const std::string& text) {
-            status_.set_text(text);
+            status_.set_text(st::redact_secrets(text, {settings_.api_key}));
         });
 
     paned_.set_position(320);
@@ -79,12 +80,15 @@ void MainWindow::on_character_selected(const st::CharacterEntry& entry) {
 void MainWindow::on_settings() {
     try {
         SettingsDialog dialog(*this, paths_, settings_, [this]() {
+            st::log_set_redactions({settings_.api_key});
             chat_view_->refresh_settings();
             status_.set_text("Settings saved");
         });
         dialog.run();
     } catch (const std::exception& error) {
-        status_.set_text(std::string("Settings error: ") + error.what());
+        st::log_write(st::LogLevel::Error, std::string("settings dialog failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("Settings error: ") + error.what(), {settings_.api_key}));
     }
 }
 
