@@ -17,7 +17,7 @@ dependency edge is listed in both directions.
 | Features in full-parity set | 105 |
 | Critical features | 19 |
 | v0.1 target features | 19 |
-| Ported features | 10 |
+| Ported features | 11 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -154,7 +154,7 @@ feature IDs; names are in the same table.
 | C27 | Vector storage and RAG | no | later | planned | C03, P07 | B08, C28 |
 | C28 | Data bank | no | later | planned | D11, C27 | — |
 | C29 | Persona manager | no | later | planned | P05, C03 | — |
-| C30 | User identity | **yes** | v0.1 | planned | P05 | C03 |
+| C30 | User identity | **yes** | v0.1 | ported | P05 | C03 |
 | C31 | World Info engine | no | later | planned | C03 | C32, D07 |
 | C32 | World Info editor and import | no | later | planned | C31 | — |
 | C33 | Exact tokenizer and token counter | no | later | planned | C06 | U19 |

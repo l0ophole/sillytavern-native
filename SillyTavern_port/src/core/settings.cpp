@@ -1,6 +1,7 @@
 #include "core/settings.h"
 
 #include "core/atomic_file.h"
+#include "core/identity.h"
 
 #include <algorithm>
 #include <cmath>
@@ -135,10 +136,7 @@ void Settings::validate() {
     context_size = std::clamp(context_size, 256, 1000000);
     max_tokens = std::clamp(max_tokens, 1, context_size - 1);
     request_timeout_seconds = std::clamp(request_timeout_seconds, 5, 3600);
-    user_name = trim(user_name);
-    if (user_name.empty()) {
-        user_name = "User";
-    }
+    user_name = normalize_user_name(user_name);
     if (trim(system_prompt).empty()) {
         system_prompt =
             "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}.";

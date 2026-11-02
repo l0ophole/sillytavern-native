@@ -25,6 +25,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | D01 Character card parser | 03-stage-2-data-compatibility.md | yes | yes | ed1ad0a | PNG tEXt chara/ccv3 with ccv3 precedence, V2/V3/legacy JSON, strict base64 |
 | D02 Character library, import, avatars | 03-stage-2-data-compatibility.md | partial | yes | c91f669 | Core scan/import/delete complete; avatar UI in stage 4; status stays planned |
 | C01 Chat session storage and lifecycle | 03-stage-2-data-compatibility.md | yes | yes | bf2a586 | ST JSONL load/save/list/rename/delete, unknown-field preservation, traversal rejection |
+| C30 User identity | 04-stage-3-prompting-generation.md | yes | yes | pending | Normalized persistent user name; settings integration |
 
 ## Stages
 
