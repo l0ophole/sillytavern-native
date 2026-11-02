@@ -4,8 +4,11 @@
 #include "core/chat_store.h"
 #include "core/paths.h"
 #include "core/settings.h"
+#include "ui/character_list.h"
 
 #include <gtkmm.h>
+
+#include <memory>
 
 namespace st {
 namespace ui {
@@ -19,6 +22,7 @@ public:
 
 private:
     void on_settings();
+    void on_character_selected(const st::CharacterEntry& entry);
 
     st::Paths paths_;
     st::Settings& settings_;
@@ -28,8 +32,7 @@ private:
     Gtk::HeaderBar header_;
     Gtk::Button settings_button_;
     Gtk::Paned paned_;
-    Gtk::ScrolledWindow left_scroll_;
-    Gtk::Label left_placeholder_;
+    std::unique_ptr<CharacterList> character_list_;
     Gtk::ScrolledWindow right_scroll_;
     Gtk::Label right_placeholder_;
     Gtk::Label status_;

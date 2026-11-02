@@ -23,7 +23,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | P07 HTTP/TLS and SSE transport | 02-stage-1-core-platform.md | yes | yes | 6311899 | libcurl POST with TLS verification, cancellation, incremental SSE parser |
 | O01 File name sanitization and path safety | 03-stage-2-data-compatibility.md | yes | yes | 88dfa73 | Traversal rejection, control-char removal, UTF-8-safe length cap, safe_join containment |
 | D01 Character card parser | 03-stage-2-data-compatibility.md | yes | yes | ed1ad0a | PNG tEXt chara/ccv3 with ccv3 precedence, V2/V3/legacy JSON, strict base64 |
-| D02 Character library, import, avatars | 03-stage-2-data-compatibility.md | partial | yes | c91f669 | Core scan/import/delete complete; avatar UI in stage 4; status stays planned |
+| D02 Character library, import, avatars | 05-stage-4-gtk-ui.md | yes | yes | pending | Core scan/import/delete plus searchable GTK list, file import dialog, 48 px avatars, selection |
 | C01 Chat session storage and lifecycle | 03-stage-2-data-compatibility.md | yes | yes | bf2a586 | ST JSONL load/save/list/rename/delete, unknown-field preservation, traversal rejection |
 | C30 User identity | 04-stage-3-prompting-generation.md | yes | yes | e30b3ea | Normalized persistent user name; settings integration |
 | C03 Prompt assembly and core macros | 04-stage-3-prompting-generation.md | yes | yes | c59e8ce | Ordered system sections, case-insensitive {{char}}/{{user}}/BOT/USER macros, role mapping, post-history instructions |

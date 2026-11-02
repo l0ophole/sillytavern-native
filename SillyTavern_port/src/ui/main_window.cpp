@@ -24,13 +24,10 @@ MainWindow::MainWindow(st::Paths paths,
     header_.pack_end(settings_button_);
     set_titlebar(header_);
 
-    left_placeholder_.set_text("No character selected");
-    left_placeholder_.set_margin_top(16);
-    left_placeholder_.set_margin_bottom(16);
-    left_placeholder_.set_margin_left(16);
-    left_placeholder_.set_margin_right(16);
-    left_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
-    left_scroll_.add(left_placeholder_);
+    character_list_ = std::make_unique<CharacterList>(
+        *this, characters_, [this](const CharacterEntry& entry) {
+            on_character_selected(entry);
+        });
 
     right_placeholder_.set_text("Select a character to start chatting");
     right_placeholder_.set_margin_top(16);
@@ -41,7 +38,7 @@ MainWindow::MainWindow(st::Paths paths,
     right_scroll_.add(right_placeholder_);
 
     paned_.set_position(320);
-    paned_.pack1(left_scroll_, true, false);
+    paned_.pack1(*character_list_, true, false);
     paned_.pack2(right_scroll_, true, false);
 
     status_.set_text("Ready");
@@ -60,7 +57,19 @@ MainWindow::MainWindow(st::Paths paths,
     settings_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_settings));
 
+    character_list_->refresh();
+    character_list_->select_first();
+
     show_all_children();
+}
+
+void MainWindow::on_character_selected(const st::CharacterEntry& entry) {
+    std::string description = entry.card.description;
+    if (description.empty()) {
+        description = "No description.";
+    }
+    right_placeholder_.set_text(entry.card.name + "\n\n" + description);
+    status_.set_text("Selected: " + entry.card.name);
 }
 
 void MainWindow::on_settings() {

@@ -16,3 +16,8 @@ if ! grep -q 'smoke: window realized' <<<"$output"; then
     echo "smoke test failed: window was not realized" >&2
     exit 1
 fi
+
+if ! grep -q 'smoke: character loaded' <<<"$output"; then
+    echo "smoke test failed: character or avatar was not loaded" >&2
+    exit 1
+fi
