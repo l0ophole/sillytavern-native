@@ -20,7 +20,8 @@ public:
               const Chat& chat) const;
     Chat create(const std::string& character,
                 const std::string& user_name,
-                const std::string& first_mes) const;
+                const std::string& first_mes,
+                const std::string& display_name = {}) const;
     void rename(const std::string& character,
                 const std::string& from,
                 const std::string& to) const;

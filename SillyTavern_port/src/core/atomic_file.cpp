@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -51,6 +52,17 @@ std::string read_file(const fs::path& path) {
     return out.str();
 }
 
+std::string read_file_limited(const fs::path& path,
+                              std::size_t max_bytes,
+                              const std::string& context) {
+    std::error_code error;
+    const std::uintmax_t size = fs::file_size(path, error);
+    if (!error && size > max_bytes) {
+        throw std::runtime_error(context + ": file is too large");
+    }
+    return read_file(path);
+}
+
 bool file_exists(const fs::path& path) {
     std::error_code error;
     return fs::exists(path, error);
@@ -90,6 +102,11 @@ void write_file_atomic(const fs::path& path, const std::string& data, fs::perms 
                 continue;
             }
             saved_errno = errno;
+            ok = false;
+            break;
+        }
+        if (result == 0) {
+            saved_errno = EIO;
             ok = false;
             break;
         }

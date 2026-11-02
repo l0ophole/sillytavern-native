@@ -7,6 +7,7 @@
 #include "core/prompt.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -258,6 +259,69 @@ TEST(session_delete_and_regenerate_boundaries) {
     st::ChatSession empty_session(make_card(), settings, store, "Seraphina", "empty.jsonl", empty);
     CHECK(!empty_session.regenerate());
     CHECK(!empty_session.delete_message(0));
+}
+
+TEST(session_action_guards) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatMessage greeting;
+    greeting.name = "Seraphina";
+    greeting.mes = "Hello";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.mes = "Hi";
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.mes = "Welcome";
+    chat.messages = {greeting, user, assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.can_regenerate_at(2));
+    CHECK(session.can_continue_at(2));
+    CHECK(!session.can_regenerate_at(1));
+    CHECK(!session.can_continue_at(1));
+    CHECK(!session.can_regenerate_at(0));
+    CHECK(!session.can_continue_at(0));
+    CHECK(!session.can_regenerate_at(99));
+    CHECK(!session.can_continue_at(99));
+
+    session.set_filename("renamed.jsonl");
+    session.save();
+    CHECK(std::filesystem::exists(store.chat_dir("Seraphina") / "renamed.jsonl"));
+}
+
+TEST(session_continuation_adds_separator) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.mes = "Hello";
+    chat.messages = {assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_to_last_assistant("world");
+    CHECK_EQ(session.chat().messages.back().mes, "Hello world");
+
+    session.append_to_last_assistant(" again");
+    CHECK_EQ(session.chat().messages.back().mes, "Hello world again");
+
+    session.append_to_last_assistant("!");
+    CHECK_EQ(session.chat().messages.back().mes, "Hello world again!");
 }
 
 TEST(session_continue_requires_assistant_tail) {

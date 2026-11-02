@@ -40,3 +40,21 @@ TEST(read_missing_file_throws) {
     }
     CHECK(threw);
 }
+
+TEST(read_file_limited_enforces_cap) {
+    TempDir temp;
+    const auto file = temp.path() / "data.txt";
+    st::write_file_atomic(file, "0123456789");
+    CHECK_EQ(st::read_file_limited(file, 10, "test"), "0123456789");
+
+    bool threw = false;
+    try {
+        (void)st::read_file_limited(file, 9, "test");
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        const std::string message = error.what();
+        CHECK(message.find("test") != std::string::npos);
+        CHECK(message.find("too large") != std::string::npos);
+    }
+    CHECK(threw);
+}

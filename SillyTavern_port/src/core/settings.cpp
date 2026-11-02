@@ -5,11 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 
 namespace st {
 namespace {
+
+constexpr std::size_t kMaxSettingsBytes = 1024u * 1024u;
 
 std::string trim(std::string value) {
     const auto first = value.find_first_not_of(" \t\r\n");
@@ -91,7 +94,21 @@ Settings Settings::load(const std::filesystem::path& path) {
         settings.validate();
         return settings;
     }
-    return from_json(parse_json(read_file(path), "settings"));
+    Settings settings =
+        from_json(parse_json(read_file_limited(path, kMaxSettingsBytes, "settings"), "settings"));
+
+    std::error_code error;
+    const std::filesystem::perms permissions = std::filesystem::status(path, error).permissions();
+    const std::filesystem::perms shared =
+        std::filesystem::perms::group_all | std::filesystem::perms::others_all;
+    if (!error && (permissions & shared) != std::filesystem::perms::none) {
+        std::filesystem::permissions(path,
+                                     std::filesystem::perms::owner_read |
+                                         std::filesystem::perms::owner_write,
+                                     std::filesystem::perm_options::replace,
+                                     error);
+    }
+    return settings;
 }
 
 void Settings::save(const std::filesystem::path& path) const {

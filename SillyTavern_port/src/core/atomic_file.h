@@ -6,6 +6,9 @@
 namespace st {
 
 std::string read_file(const std::filesystem::path& path);
+std::string read_file_limited(const std::filesystem::path& path,
+                              std::size_t max_bytes,
+                              const std::string& context);
 bool file_exists(const std::filesystem::path& path);
 
 void write_file_atomic(const std::filesystem::path& path,

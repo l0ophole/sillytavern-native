@@ -24,6 +24,24 @@ bool handle_event(const SseEvent& event, StreamState& state) {
 
     try {
         const Json value = parse_json(event.data, "stream event");
+        if (value.is_object()) {
+            if (value.contains("error")) {
+                const Json& error = value["error"];
+                if (error.is_object() && error.contains("message") &&
+                    error["message"].is_string()) {
+                    state.error = error["message"].get<std::string>();
+                    return false;
+                }
+                if (error.is_string()) {
+                    state.error = error.get<std::string>();
+                    return false;
+                }
+            }
+            if (value.contains("detail") && value["detail"].is_string()) {
+                state.error = value["detail"].get<std::string>();
+                return false;
+            }
+        }
         if (!value.is_object() || !value.contains("choices") || !value["choices"].is_array() ||
             value["choices"].empty()) {
             return true;

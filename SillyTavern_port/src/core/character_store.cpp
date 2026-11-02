@@ -68,7 +68,8 @@ std::vector<CharacterEntry> CharacterStore::list() const {
 }
 
 CharacterEntry CharacterStore::import_file(const fs::path& source) {
-    const std::string bytes = read_file(source);
+    constexpr std::size_t kMaxCardBytes = 64u * 1024u * 1024u;
+    const std::string bytes = read_file_limited(source, kMaxCardBytes, "character card");
     CharacterCard card = parse_character_card(bytes, source.string());
 
     std::string extension = lowercase(source.extension().string());

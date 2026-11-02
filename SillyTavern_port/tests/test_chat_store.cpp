@@ -4,6 +4,7 @@
 #include "core/atomic_file.h"
 #include "core/chat_store.h"
 
+#include <filesystem>
 #include <string>
 
 TEST(chat_create_includes_greeting) {
@@ -88,6 +89,32 @@ TEST(chat_roundtrip_preserves_system_role) {
     CHECK(loaded.messages[1].is_system);
     CHECK(!loaded.messages[1].is_user);
     CHECK_EQ(loaded.messages[1].mes, "Narrate only.");
+}
+
+TEST(chat_create_uses_display_name) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto chat = store.create("id-1", "User", "Hello", "Seraphina");
+    CHECK_EQ(chat.metadata.character_name, "Seraphina");
+    CHECK_EQ(chat.messages.size(), std::size_t(1));
+    CHECK_EQ(chat.messages[0].name, "Seraphina");
+}
+
+TEST(chat_load_rejects_oversized_file) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto path = store.chat_dir("Seraphina") / "big.jsonl";
+    st::write_file_atomic(path, "");
+    std::filesystem::resize_file(path, 64u * 1024u * 1024u + 1u);
+    bool threw = false;
+    try {
+        (void)store.load("Seraphina", "big.jsonl");
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        const std::string message = error.what();
+        CHECK(message.find("too large") != std::string::npos);
+    }
+    CHECK(threw);
 }
 
 TEST(chat_list_rename_remove) {

@@ -14,6 +14,8 @@ namespace fs = std::filesystem;
 namespace st {
 namespace {
 
+constexpr std::size_t kMaxChatBytes = 64u * 1024u * 1024u;
+
 std::string read_string(const Json& object, const char* key) {
     if (!object.contains(key) || !object[key].is_string()) {
         return {};
@@ -112,7 +114,7 @@ std::vector<std::string> ChatStore::list(const std::string& character) const {
 Chat ChatStore::load(const std::string& character, const std::string& filename) const {
     validate_chat_filename(filename);
     const fs::path path = safe_join(chat_dir(character), filename);
-    const std::string text = read_file(path);
+    const std::string text = read_file_limited(path, kMaxChatBytes, filename);
 
     Chat chat;
     bool metadata_seen = false;
@@ -182,15 +184,17 @@ void ChatStore::save(const std::string& character,
 
 Chat ChatStore::create(const std::string& character,
                        const std::string& user_name,
-                       const std::string& first_mes) const {
+                       const std::string& first_mes,
+                       const std::string& display_name) const {
+    const std::string name = display_name.empty() ? character : display_name;
     Chat chat;
     chat.metadata.user_name = user_name;
-    chat.metadata.character_name = character;
+    chat.metadata.character_name = name;
     chat.metadata.create_date = utc_now();
     chat.metadata.chat_metadata = Json::object();
     if (!first_mes.empty()) {
         ChatMessage greeting;
-        greeting.name = character;
+        greeting.name = name;
         greeting.send_date = utc_now();
         greeting.mes = first_mes;
         chat.messages.push_back(std::move(greeting));

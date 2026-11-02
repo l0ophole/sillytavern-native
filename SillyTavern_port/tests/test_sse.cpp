@@ -39,6 +39,14 @@ TEST(sse_finish_dispatches_pending_event) {
     CHECK_EQ(events[0].data, "tail");
 }
 
+TEST(sse_finish_handles_multiple_lines) {
+    st::SseParser parser;
+    CHECK_EQ(parser.feed("data: a\ndata: b").size(), std::size_t(0));
+    const auto events = parser.finish();
+    CHECK_EQ(events.size(), std::size_t(1));
+    CHECK_EQ(events[0].data, "a\nb");
+}
+
 TEST(sse_reset_clears_state) {
     st::SseParser parser;
     (void)parser.feed("data: partial");

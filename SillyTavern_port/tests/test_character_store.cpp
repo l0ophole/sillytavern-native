@@ -68,6 +68,24 @@ TEST(store_rejects_invalid_before_copy) {
     CHECK(!std::filesystem::exists(temp.path() / "characters" / "bad.png"));
 }
 
+TEST(store_import_rejects_oversized_card) {
+    TempDir temp;
+    st::CharacterStore store(temp.path() / "characters");
+    const auto source = temp.path() / "huge.png";
+    st::write_file_atomic(source, "");
+    std::filesystem::resize_file(source, 64u * 1024u * 1024u + 1u);
+
+    bool threw = false;
+    try {
+        (void)store.import_file(source);
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        CHECK(std::string(error.what()).find("too large") != std::string::npos);
+    }
+    CHECK(threw);
+    CHECK(store.list().empty());
+}
+
 TEST(store_remove_deletes_only_id) {
     TempDir temp;
     st::CharacterStore store(temp.path() / "characters");

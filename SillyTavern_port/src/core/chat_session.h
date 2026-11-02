@@ -40,9 +40,14 @@ public:
     bool edit_message(std::size_t index, const std::string& text);
     bool delete_message(std::size_t index);
     bool regenerate();
+    bool can_regenerate_at(std::size_t index) const;
     bool can_continue() const;
+    bool can_continue_at(std::size_t index) const;
     std::string continue_prefix() const;
     void append_to_last_assistant(const std::string& text);
+
+    const std::string& filename() const { return filename_; }
+    void set_filename(std::string filename);
 
 private:
     CharacterCard card_;

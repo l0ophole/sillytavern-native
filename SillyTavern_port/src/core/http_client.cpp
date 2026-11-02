@@ -53,8 +53,6 @@ bool has_http_scheme(const std::string& url) {
 HttpClient::~HttpClient() = default;
 
 HttpResponse HttpClient::post(const HttpRequest& request, const HttpDataCallback& on_data) {
-    cancelled_.store(false);
-
     HttpResponse response;
     if (!has_http_scheme(request.url)) {
         response.error = "invalid URL: " + request.url;
@@ -120,6 +118,10 @@ HttpResponse HttpClient::post(const HttpRequest& request, const HttpDataCallback
 
 void HttpClient::cancel() {
     cancelled_.store(true);
+}
+
+void HttpClient::reset_cancel() {
+    cancelled_.store(false);
 }
 
 }  // namespace st

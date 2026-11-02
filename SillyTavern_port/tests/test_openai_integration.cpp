@@ -88,6 +88,21 @@ TEST(openai_keeps_partial_text_on_stream_error) {
     CHECK_EQ(result.text, "hello");
 }
 
+TEST(openai_reports_mid_stream_error) {
+    const char* base = std::getenv("ST_MOCK_BASE_URL");
+    if (base == nullptr) {
+        return;
+    }
+    st::OpenAiClient client;
+    st::OpenAiRequest request;
+    request.base_url = std::string(base) + "/stream-error";
+    request.model = "mock";
+    request.messages = {{"user", "Hi"}};
+    const auto result = client.generate(request);
+    CHECK_EQ(result.text, "hello");
+    CHECK_EQ(result.error, "boom");
+}
+
 TEST(openai_cancels_slow_stream) {
     const char* base = std::getenv("ST_MOCK_BASE_URL");
     if (base == nullptr) {

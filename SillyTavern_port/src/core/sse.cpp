@@ -33,12 +33,22 @@ std::vector<SseEvent> SseParser::feed(const std::string& data) {
 std::vector<SseEvent> SseParser::finish() {
     std::vector<SseEvent> events;
     if (!buffer_.empty()) {
-        std::string line = buffer_;
-        buffer_.clear();
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
+        std::size_t start = 0;
+        while (true) {
+            const std::size_t newline = buffer_.find('\n', start);
+            std::string line = newline == std::string::npos
+                                   ? buffer_.substr(start)
+                                   : buffer_.substr(start, newline - start);
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
+            }
+            process_line(line, events);
+            if (newline == std::string::npos) {
+                break;
+            }
+            start = newline + 1;
         }
-        process_line(line, events);
+        buffer_.clear();
     }
     dispatch(events);
     return events;

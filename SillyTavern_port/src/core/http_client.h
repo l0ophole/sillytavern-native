@@ -36,6 +36,7 @@ public:
 
     HttpResponse post(const HttpRequest& request, const HttpDataCallback& on_data = {});
     void cancel();
+    void reset_cancel();
 
 private:
     std::atomic<bool> cancelled_{false};

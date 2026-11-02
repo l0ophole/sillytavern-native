@@ -3,6 +3,7 @@
 #include "core/context_budget.h"
 #include "core/identity.h"
 
+#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <ctime>
@@ -30,6 +31,18 @@ ChatMessage make_message(const std::string& name, bool is_user, const std::strin
     message.send_date = utc_now();
     message.mes = text;
     return message;
+}
+
+bool needs_separator(const std::string& tail, const std::string& text) {
+    if (tail.empty() || text.empty()) {
+        return false;
+    }
+    const unsigned char last = static_cast<unsigned char>(tail.back());
+    const unsigned char first = static_cast<unsigned char>(text.front());
+    if (std::isspace(last) != 0 || std::isspace(first) != 0) {
+        return false;
+    }
+    return std::string(".,!?;:)]}\"'").find(static_cast<char>(first)) == std::string::npos;
 }
 
 std::size_t last_non_empty_index(const Chat& chat) {
@@ -135,6 +148,14 @@ bool ChatSession::regenerate() {
     return true;
 }
 
+bool ChatSession::can_regenerate_at(std::size_t index) const {
+    if (index + 1 != chat_.messages.size()) {
+        return false;
+    }
+    const ChatMessage& message = chat_.messages[index];
+    return !message.is_user && !message.is_system;
+}
+
 bool ChatSession::can_continue() const {
     const std::size_t index = last_non_empty_index(chat_);
     if (index >= chat_.messages.size()) {
@@ -142,6 +163,18 @@ bool ChatSession::can_continue() const {
     }
     const ChatMessage& last = chat_.messages[index];
     return !last.is_user && !last.is_system;
+}
+
+bool ChatSession::can_continue_at(std::size_t index) const {
+    if (index >= chat_.messages.size() || index != last_non_empty_index(chat_)) {
+        return false;
+    }
+    const ChatMessage& message = chat_.messages[index];
+    return !message.is_user && !message.is_system;
+}
+
+void ChatSession::set_filename(std::string filename) {
+    filename_ = std::move(filename);
 }
 
 std::string ChatSession::continue_prefix() const {
@@ -152,10 +185,14 @@ std::string ChatSession::continue_prefix() const {
 }
 
 void ChatSession::append_to_last_assistant(const std::string& text) {
-    if (!can_continue()) {
+    if (!can_continue() || text.empty()) {
         return;
     }
-    chat_.messages[last_non_empty_index(chat_)].mes += text;
+    std::string& message = chat_.messages[last_non_empty_index(chat_)].mes;
+    if (needs_separator(message, text)) {
+        message += ' ';
+    }
+    message += text;
 }
 
 }  // namespace st
