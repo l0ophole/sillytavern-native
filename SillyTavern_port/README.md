@@ -53,6 +53,9 @@ ported appear dim and cannot be selected.
 ./tests/alpine_build.sh # Alpine musl build, tests, and smoke (requires Docker)
 ```
 
+The Alpine script installs its own test dependencies in the container,
+including `xvfb-run`, fonts, bash, and Python for the mock streaming server.
+
 ## Data locations
 
 ```text
@@ -69,7 +72,7 @@ SillyTavern installation is never modified.
 
 ```text
 src/core/       GTK-free data, settings, prompt, HTTP, and generation library
-src/app/        GTK3/gtkmm user interface
+src/ui/         GTK3/gtkmm user interface
 tools/          menuconfig and documentation generators
 features/       canonical feature registry
 tests/          unit and integration tests

@@ -34,6 +34,13 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C04 OpenAI-compatible streaming client | 04-stage-3-prompting-generation.md | yes | yes | f6fcff8 | SSE delta streaming, non-streaming fallback, error mapping, cancellation, mock-server integration tests |
 | P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | afd7c8b | GTK3 window, paned layout, header/settings dialog, status bar, Xvfb smoke harness |
 
+## v0.1 completion
+
+All 19 critical v0.1 features are ported and tested. The remaining 86 features
+stay visible but dim and unselectable in `make menuconfig`. Host verification
+and the Alpine (musl) container gate both pass, including the Xvfb smoke test
+and live mock-server streaming.
+
 ## Stages
 
 | Stage | Plan written | Complete | Evidence |
@@ -43,4 +50,4 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | 2 Data compatibility | yes | yes | `make test` 65 tests; PNG ccv3 precedence, path containment, JSONL round-trip; D02 UI completed in stage 4 |
 | 3 Prompting/generation | yes | yes | `make test` 101 tests, `tests/integration_openai.sh` 101 tests; prompt order/macros, budget trimming, sampling clamps, SSE streaming/errors/cancellation |
 | 4 GTK UI | yes | yes | `make test` 113 tests, `make smoke` (window, avatar, chat round-trip, message actions, live UI streaming), `tests/integration_openai.sh` 113 tests, menuconfig selftest; no warnings; `src/core/` GTK-free |
-| 5 Verification | no | no | — |
+| 5 Verification | yes | yes | `tests/verify_v01.sh`: clean build, 113 tests, five smoke markers, menuconfig selftest, 105/19/86 counts, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 113 tests, five smoke markers including live UI streaming |
