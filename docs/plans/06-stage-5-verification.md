@@ -48,7 +48,7 @@ The script must:
 - resolve the port root from `BASH_SOURCE`;
 - require `docker`, with image override `ALPINE_IMAGE` defaulting to `alpine:3.20`;
 - run the container with the source mounted read-only at `/src`;
-- install `build-base gtkmm3-dev gtk+3.0-dev curl-dev ncurses-dev pkgconf xvfb bash python3`;
+- install `build-base gtkmm3-dev gtk+3.0-dev curl-dev ncurses-dev pkgconf xvfb xvfb-run xauth font-dejavu bash python3`;
 - copy `/src` to `/work`, remove any host `build/` and `.config`, and run `make`, `make test`, and `make smoke`;
 - rely on `make smoke` to start `tests/mock_openai.py` and require `smoke: ui streaming`;
 - print `alpine: build ok`, `alpine: tests ok`, and `alpine: smoke ok` on success.

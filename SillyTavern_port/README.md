@@ -46,6 +46,13 @@ make smoke           # run the GUI smoke test under Xvfb
 `make` creates a default `.config` if none exists. Features that have not been
 ported appear dim and cannot be selected.
 
+## Verification
+
+```sh
+./tests/verify_v01.sh   # host build, tests, smoke, integration, and feature counts
+./tests/alpine_build.sh # Alpine musl build, tests, and smoke (requires Docker)
+```
+
 ## Data locations
 
 ```text
