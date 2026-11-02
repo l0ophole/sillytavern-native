@@ -23,16 +23,16 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | P07 HTTP/TLS and SSE transport | 02-stage-1-core-platform.md | yes | yes | 6311899 | libcurl POST with TLS verification, cancellation, incremental SSE parser |
 | O01 File name sanitization and path safety | 03-stage-2-data-compatibility.md | yes | yes | 88dfa73 | Traversal rejection, control-char removal, UTF-8-safe length cap, safe_join containment |
 | D01 Character card parser | 03-stage-2-data-compatibility.md | yes | yes | ed1ad0a | PNG tEXt chara/ccv3 with ccv3 precedence, V2/V3/legacy JSON, strict base64 |
-| D02 Character library, import, avatars | 05-stage-4-gtk-ui.md | yes | yes | pending | Core scan/import/delete plus searchable GTK list, file import dialog, 48 px avatars, selection |
+| D02 Character library, import, avatars | 05-stage-4-gtk-ui.md | yes | yes | 9d83f1b | Core scan/import/delete plus searchable GTK list, file import dialog, 48 px avatars, selection |
 | C01 Chat session storage and lifecycle | 03-stage-2-data-compatibility.md | yes | yes | bf2a586 | ST JSONL load/save/list/rename/delete, unknown-field preservation, traversal rejection |
-| C02 Chat transcript UI and composer | 05-stage-4-gtk-ui.md | yes | yes | pending | ChatSession prompt/request, transcript with macros, Enter-to-send composer, chat selector/new, threaded SSE streaming with cancel and partial-text retention |
-| C05 Message actions | 05-stage-4-gtk-ui.md | yes | yes | pending | Edit/delete/regenerate/continue core actions, transcript context menu, edit/confirm dialogs, continuation streaming |
+| C02 Chat transcript UI and composer | 05-stage-4-gtk-ui.md | yes | yes | 3bc88a4 | ChatSession prompt/request, transcript with macros, Enter-to-send composer, chat selector/new, threaded SSE streaming with cancel and partial-text retention |
+| C05 Message actions | 05-stage-4-gtk-ui.md | yes | yes | 725405d | Edit/delete/regenerate/continue core actions, transcript context menu, edit/confirm dialogs, continuation streaming |
 | C30 User identity | 04-stage-3-prompting-generation.md | yes | yes | e30b3ea | Normalized persistent user name; settings integration |
 | C03 Prompt assembly and core macros | 04-stage-3-prompting-generation.md | yes | yes | c59e8ce | Ordered system sections, case-insensitive {{char}}/{{user}}/BOT/USER macros, role mapping, post-history instructions |
 | C06 Context budgeting and history trimming | 04-stage-3-prompting-generation.md | yes | yes | ac10cc2 | Deterministic UTF-8 token estimate, newest-first trimming, greeting reservation, budget enforcement |
 | C39 Basic sampling controls | 04-stage-3-prompting-generation.md | yes | yes | 0b897b5 | Temperature/top_p/max_tokens/stream clamps, settings mapping, request JSON |
 | C04 OpenAI-compatible streaming client | 04-stage-3-prompting-generation.md | yes | yes | f6fcff8 | SSE delta streaming, non-streaming fallback, error mapping, cancellation, mock-server integration tests |
-| P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | pending | GTK3 window, paned layout, header/settings dialog, status bar, Xvfb smoke harness |
+| P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | afd7c8b | GTK3 window, paned layout, header/settings dialog, status bar, Xvfb smoke harness |
 
 ## Stages
 
@@ -40,7 +40,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 |---|---|---|---|
 | 0 Foundation | yes | yes | `make`, `make test`, menuconfig selftest, Xterm TUI smoke |
 | 1 Core platform | yes | yes | `make test` 28 tests, menuconfig selftest, mock SSE server streaming |
-| 2 Data compatibility | yes | yes | `make test` 65 tests; PNG ccv3 precedence, path containment, JSONL round-trip; D02 UI deferred to stage 4 |
+| 2 Data compatibility | yes | yes | `make test` 65 tests; PNG ccv3 precedence, path containment, JSONL round-trip; D02 UI completed in stage 4 |
 | 3 Prompting/generation | yes | yes | `make test` 101 tests, `tests/integration_openai.sh` 101 tests; prompt order/macros, budget trimming, sampling clamps, SSE streaming/errors/cancellation |
-| 4 GTK UI | no | no | — |
+| 4 GTK UI | yes | yes | `make test` 113 tests, `make smoke` (window, avatar, chat round-trip, message actions, live UI streaming), `tests/integration_openai.sh` 113 tests, menuconfig selftest; no warnings; `src/core/` GTK-free |
 | 5 Verification | no | no | — |
