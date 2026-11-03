@@ -55,6 +55,7 @@ private:
     void load_chat_in_background(std::string character_key,
                                  std::string filename,
                                  std::uint64_t generation);
+    bool apply_load_result(ChatLoadResult& result);
     void on_load_dispatcher();
     void stop_loading();
 

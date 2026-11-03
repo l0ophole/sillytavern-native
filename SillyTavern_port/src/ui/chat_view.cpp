@@ -780,26 +780,64 @@ bool ChatView::create_new_chat(bool announce) {
 
 bool ChatView::load_chat(const std::string& filename) {
     stop_streaming();
+    ChatLoadResult result;
+    result.filename = filename;
     try {
-        st::Chat chat = chats_.load(character_key_, filename);
-        filename_ = filename;
-        session_ = std::make_unique<st::ChatSession>(
-            card_, settings_, chats_, character_key_, filename_, std::move(chat));
+        result.chat = chats_.load(character_key_, filename);
+    } catch (const std::exception& error) {
+        result.error = error.what();
+        return apply_load_result(result);
+    }
 
-        bool recovered = false;
-        std::optional<st::ChatDraft> draft;
+    try {
+        result.draft = chats_.load_draft(character_key_, filename);
+    } catch (const std::exception& error) {
+        result.draft_error = error.what();
+    }
+    return apply_load_result(result);
+}
+
+bool ChatView::apply_load_result(ChatLoadResult& result) {
+    const auto discard_draft = [this](const std::string& name) {
         try {
-            draft = chats_.load_draft(character_key_, filename_);
+            chats_.clear_draft(character_key_, name);
         } catch (const std::exception& error) {
             st::log_write(st::LogLevel::Error,
-                          std::string("chat draft load failed: ") + error.what());
-            chats_.clear_draft(character_key_, filename_);
+                          std::string("chat draft clear failed: ") + error.what());
         }
-        if (draft.has_value()) {
-            if (session_->recover_draft(*draft)) {
+    };
+
+    if (!result.error.empty()) {
+        st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + result.error);
+        if (!result.draft_error.empty()) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("chat draft load failed: ") + result.draft_error);
+            discard_draft(result.filename);
+        }
+        session_.reset();
+        filename_.clear();
+        refresh_selector();
+        refresh_transcript();
+        update_controls();
+        set_status(std::string("Chat error: ") + result.error);
+        return false;
+    }
+
+    try {
+        filename_ = result.filename;
+        session_ = std::make_unique<st::ChatSession>(
+            card_, settings_, chats_, character_key_, filename_, std::move(result.chat));
+
+        if (!result.draft_error.empty()) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("chat draft load failed: ") + result.draft_error);
+            discard_draft(filename_);
+        }
+        if (result.draft.has_value()) {
+            if (session_->recover_draft(*result.draft)) {
+                result.recovered = true;
                 try {
                     session_->save();
-                    recovered = true;
                 } catch (const std::exception& error) {
                     st::log_write(st::LogLevel::Error,
                                   std::string("chat draft recovery save failed: ") +
@@ -808,14 +846,14 @@ bool ChatView::load_chat(const std::string& filename) {
             } else {
                 st::log_write(st::LogLevel::Warn,
                               "discarding stale chat draft: " + filename_);
-                chats_.clear_draft(character_key_, filename_);
+                discard_draft(filename_);
             }
         }
 
         refresh_selector();
         refresh_transcript();
         update_controls();
-        set_status(recovered ? "Recovered unsaved chat" : "Loaded " + filename);
+        set_status(result.recovered ? "Recovered unsaved chat" : "Loaded " + filename_);
         return true;
     } catch (const std::exception& error) {
         st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + error.what());
@@ -908,74 +946,8 @@ void ChatView::on_load_dispatcher() {
         return;
     }
 
-    const auto discard_draft = [this](const std::string& name) {
-        try {
-            chats_.clear_draft(character_key_, name);
-        } catch (const std::exception& error) {
-            st::log_write(st::LogLevel::Error,
-                          std::string("chat draft clear failed: ") + error.what());
-        }
-    };
-
-    if (!result.error.empty()) {
-        st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + result.error);
-        if (!result.draft_error.empty()) {
-            st::log_write(st::LogLevel::Error,
-                          std::string("chat draft load failed: ") + result.draft_error);
-            discard_draft(result.filename);
-        }
-        session_.reset();
-        filename_.clear();
-        refresh_selector();
-        refresh_transcript();
-        loading_ = false;
-        update_controls();
-        set_status(std::string("Chat error: ") + result.error);
-        return;
-    }
-
-    try {
-        filename_ = result.filename;
-        session_ = std::make_unique<st::ChatSession>(
-            card_, settings_, chats_, character_key_, filename_, std::move(result.chat));
-
-        if (!result.draft_error.empty()) {
-            st::log_write(st::LogLevel::Error,
-                          std::string("chat draft load failed: ") + result.draft_error);
-            discard_draft(filename_);
-        }
-        if (result.draft.has_value()) {
-            if (session_->recover_draft(*result.draft)) {
-                result.recovered = true;
-                try {
-                    session_->save();
-                } catch (const std::exception& error) {
-                    st::log_write(st::LogLevel::Error,
-                                  std::string("chat draft recovery save failed: ") +
-                                      error.what());
-                }
-            } else {
-                st::log_write(st::LogLevel::Warn,
-                              "discarding stale chat draft: " + filename_);
-                discard_draft(filename_);
-            }
-        }
-
-        refresh_selector();
-        refresh_transcript();
-        loading_ = false;
-        update_controls();
-        set_status(result.recovered ? "Recovered unsaved chat" : "Loaded " + filename_);
-    } catch (const std::exception& error) {
-        st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + error.what());
-        session_.reset();
-        filename_.clear();
-        refresh_selector();
-        refresh_transcript();
-        loading_ = false;
-        update_controls();
-        set_status(std::string("Chat error: ") + error.what());
-    }
+    loading_ = false;
+    apply_load_result(result);
 }
 
 void ChatView::stop_loading() {
