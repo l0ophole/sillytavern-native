@@ -312,6 +312,21 @@ TEST(chat_draft_rejects_oversized_file) {
     CHECK(threw);
 }
 
+TEST(chat_store_rejects_oversized_draft) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    st::ChatDraft draft;
+    draft.text = std::string(16u * 1024u * 1024u + 1, 'x');
+    bool threw = false;
+    try {
+        store.save_draft("char", "chat.jsonl", draft);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
+    CHECK(!std::filesystem::exists(store.draft_path("char", "chat.jsonl")));
+}
+
 TEST(chat_rename_refuses_to_overwrite) {
     TempDir temp;
     st::ChatStore store(temp.path());

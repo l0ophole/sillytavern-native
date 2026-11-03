@@ -112,7 +112,11 @@ void ChatStore::save_draft(const std::string& character,
     value["continue_mode"] = draft.continue_mode;
     value["send_date"] = draft.send_date;
     value["base_messages"] = draft.base_messages;
-    write_file_atomic(draft_path(character, filename), dump_json(value) + "\n");
+    const std::string payload = dump_json(value) + "\n";
+    if (payload.size() > kMaxDraftBytes) {
+        throw std::runtime_error("chat draft exceeds 16 MiB limit");
+    }
+    write_file_atomic(draft_path(character, filename), payload);
 }
 
 std::optional<ChatDraft> ChatStore::load_draft(const std::string& character,

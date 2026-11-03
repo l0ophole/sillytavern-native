@@ -3,6 +3,7 @@
 #include "core/chat_session.h"
 #include "core/character_store.h"
 #include "core/chat_store.h"
+#include "core/draft_throttle.h"
 #include "core/settings.h"
 
 #include <gtkmm.h>
@@ -144,8 +145,7 @@ private:
     bool updating_selector_ = false;
     std::string draft_send_date_;
     std::size_t base_messages_ = 0;
-    bool draft_saved_ = false;
-    std::chrono::steady_clock::time_point last_draft_save_;
+    st::DraftThrottle draft_throttle_;
 
     Glib::Dispatcher load_dispatcher_;
     std::thread load_worker_;
