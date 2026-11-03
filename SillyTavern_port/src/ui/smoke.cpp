@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -399,14 +400,35 @@ int run_smoke_test() {
             ChatView slow_view(chats, slow_settings, [](const std::string&) {});
             slow_view.show_all();
             slow_view.set_character(slow_entry);
+            const std::string slow_filename = slow_view.current_filename();
+            if (slow_filename.empty()) {
+                std::cerr << "smoke: slow-bot chat has no filename\n";
+                return 1;
+            }
             slow_view.submit_message("Interrupt me");
 
-            const gint64 chunk_wait = g_get_monotonic_time() + 250 * 1000;
-            while (g_get_monotonic_time() < chunk_wait) {
+            bool draft_seen = false;
+            const gint64 draft_wait = g_get_monotonic_time() + 1000 * 1000;
+            while (g_get_monotonic_time() < draft_wait) {
                 while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                try {
+                    const std::optional<st::ChatDraft> draft =
+                        chats.load_draft("slow-bot", slow_filename);
+                    if (draft.has_value() &&
+                        draft->text.find("partial") != std::string::npos) {
+                        draft_seen = true;
+                        break;
+                    }
+                } catch (const std::exception&) {
                 }
                 g_usleep(5000);
             }
+            if (!draft_seen) {
+                std::cerr << "smoke: autosave journal missing\n";
+                return 1;
+            }
+            std::cout << "smoke: autosave journal\n";
 
             slow_view.set_character(mock_entry);
 
@@ -423,6 +445,53 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: partial on switch\n";
+        }
+
+        {
+            st::CharacterEntry recover_entry;
+            recover_entry.id = "recover-bot";
+            recover_entry.card.name = "RecoverBot";
+            recover_entry.card.system_prompt = "Test.";
+            recover_entry.card.first_mes = "Greeting.";
+
+            st::Chat recover_chat = chats.create("recover-bot",
+                                                 st::normalize_user_name(settings.user_name),
+                                                 "Greeting.");
+            st::ChatMessage recover_user;
+            recover_user.name = st::normalize_user_name(settings.user_name);
+            recover_user.is_user = true;
+            recover_user.send_date = "2026-11-01T00:00:01Z";
+            recover_user.mes = "Hi";
+            recover_chat.messages.push_back(recover_user);
+            chats.save("recover-bot", "recover.jsonl", recover_chat);
+
+            st::ChatDraft recover_draft;
+            recover_draft.text = "Recovered partial";
+            recover_draft.continue_mode = false;
+            recover_draft.send_date = "2026-11-01T00:00:02Z";
+            recover_draft.base_messages = 2;
+            chats.save_draft("recover-bot", "recover.jsonl", recover_draft);
+
+            ChatView recover_view(chats, settings, [](const std::string&) {});
+            recover_view.show_all();
+            if (!recover_view.set_character(recover_entry)) {
+                std::cerr << "smoke: crash recovery set_character failed\n";
+                return 1;
+            }
+
+            const st::Chat recovered = chats.load("recover-bot", "recover.jsonl");
+            if (recovered.messages.size() != std::size_t(3) ||
+                recovered.messages.back().name != "RecoverBot" ||
+                recovered.messages.back().mes != "Recovered partial" ||
+                recovered.messages.back().send_date != "2026-11-01T00:00:02Z") {
+                std::cerr << "smoke: crash recovery mismatch\n";
+                return 1;
+            }
+            if (chats.load_draft("recover-bot", "recover.jsonl").has_value()) {
+                std::cerr << "smoke: crash recovery left the draft behind\n";
+                return 1;
+            }
+            std::cout << "smoke: crash recovery\n";
         }
 
         window.hide();

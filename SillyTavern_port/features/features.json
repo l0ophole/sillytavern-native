@@ -120,7 +120,7 @@
       "description": "Recover unsaved chat state after abnormal termination.",
       "critical": false,
       "target": "0.1.1",
-      "status": "planned",
+      "status": "ported",
       "depends_on": [
         "P02"
       ]

@@ -35,6 +35,7 @@ public:
 
     void append_user(const std::string& text);
     void append_assistant(const std::string& text);
+    bool recover_draft(const ChatDraft& draft);
     void save() const;
 
     Chat snapshot() const;

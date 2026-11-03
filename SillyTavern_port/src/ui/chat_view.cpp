@@ -28,6 +28,16 @@ std::string trim_copy(const std::string& value) {
     return value.substr(first, last - first + 1);
 }
 
+std::string utc_now() {
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
+    std::tm utc {};
+    gmtime_r(&seconds, &utc);
+    char buffer[32] = {};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
+    return buffer;
+}
+
 }  // namespace
 
 ChatView::ChatView(st::ChatStore& chats,
@@ -373,6 +383,7 @@ void ChatView::on_dispatcher() {
         streaming_text_ += chunks;
         refresh_transcript();
         append_streaming_display();
+        maybe_save_draft();
     }
     if (finished) {
         finish_generation(result);
@@ -534,6 +545,10 @@ bool ChatView::start_generation(st::OpenAiRequest request, bool continue_mode) {
     streaming_ = true;
     continue_mode_ = continue_mode;
     streaming_text_.clear();
+    draft_send_date_ = utc_now();
+    base_messages_ = session_ ? session_->chat().messages.size() : 0;
+    draft_saved_ = false;
+    last_draft_save_ = std::chrono::steady_clock::time_point{};
     update_controls();
     set_status("Generating...");
 
@@ -634,6 +649,31 @@ std::string ChatView::collect_streaming_text() {
     return collected;
 }
 
+void ChatView::maybe_save_draft() {
+    if (!session_ || streaming_text_.empty() || character_key_.empty() || filename_.empty()) {
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (draft_saved_ && now - last_draft_save_ < std::chrono::seconds(1)) {
+        return;
+    }
+
+    st::ChatDraft draft;
+    draft.text = streaming_text_;
+    draft.continue_mode = continue_mode_;
+    draft.send_date = draft_send_date_;
+    draft.base_messages = base_messages_;
+    try {
+        chats_.save_draft(character_key_, filename_, draft);
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("chat draft save failed: ") + error.what());
+    }
+    draft_saved_ = true;
+    last_draft_save_ = now;
+}
+
 void ChatView::stop_streaming() {
     if (!streaming_) {
         return;
@@ -716,10 +756,37 @@ bool ChatView::load_chat(const std::string& filename) {
         filename_ = filename;
         session_ = std::make_unique<st::ChatSession>(
             card_, settings_, chats_, character_key_, filename_, std::move(chat));
+
+        bool recovered = false;
+        std::optional<st::ChatDraft> draft;
+        try {
+            draft = chats_.load_draft(character_key_, filename_);
+        } catch (const std::exception& error) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("chat draft load failed: ") + error.what());
+            chats_.clear_draft(character_key_, filename_);
+        }
+        if (draft.has_value()) {
+            if (session_->recover_draft(*draft)) {
+                try {
+                    session_->save();
+                    recovered = true;
+                } catch (const std::exception& error) {
+                    st::log_write(st::LogLevel::Error,
+                                  std::string("chat draft recovery save failed: ") +
+                                      error.what());
+                }
+            } else {
+                st::log_write(st::LogLevel::Warn,
+                              "discarding stale chat draft: " + filename_);
+                chats_.clear_draft(character_key_, filename_);
+            }
+        }
+
         refresh_selector();
         refresh_transcript();
         update_controls();
-        set_status("Loaded " + filename);
+        set_status(recovered ? "Recovered unsaved chat" : "Loaded " + filename);
         return true;
     } catch (const std::exception& error) {
         st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + error.what());

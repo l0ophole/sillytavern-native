@@ -16,6 +16,7 @@ namespace st {
 namespace {
 
 constexpr std::size_t kMaxChatBytes = 64u * 1024u * 1024u;
+constexpr std::size_t kMaxDraftBytes = 16u * 1024u * 1024u;
 
 std::string read_string(const Json& object, const char* key) {
     if (!object.contains(key) || !object[key].is_string()) {
@@ -94,6 +95,65 @@ fs::path ChatStore::lock_path(const std::string& character,
                               const std::string& filename) const {
     validate_chat_filename(filename);
     return safe_join(chat_dir(character), ".locks") / (filename + ".lock");
+}
+
+fs::path ChatStore::draft_path(const std::string& character,
+                               const std::string& filename) const {
+    validate_chat_filename(filename);
+    return safe_join(chats_root_, ".journal") / sanitize_filename(character, "character") /
+           (filename + ".draft");
+}
+
+void ChatStore::save_draft(const std::string& character,
+                           const std::string& filename,
+                           const ChatDraft& draft) const {
+    Json value = Json::object();
+    value["text"] = draft.text;
+    value["continue_mode"] = draft.continue_mode;
+    value["send_date"] = draft.send_date;
+    value["base_messages"] = draft.base_messages;
+    write_file_atomic(draft_path(character, filename), dump_json(value) + "\n");
+}
+
+std::optional<ChatDraft> ChatStore::load_draft(const std::string& character,
+                                               const std::string& filename) const {
+    const fs::path path = draft_path(character, filename);
+    std::error_code error;
+    if (!fs::exists(path, error)) {
+        return std::nullopt;
+    }
+
+    const std::string text = read_file_limited(path, kMaxDraftBytes, "chat draft");
+    const Json value = parse_json(text, "chat draft " + filename);
+    if (!value.is_object()) {
+        throw std::runtime_error("chat draft " + filename + ": expected a JSON object");
+    }
+    if (!value.contains("text") || !value["text"].is_string()) {
+        throw std::runtime_error("chat draft " + filename + ": invalid text");
+    }
+    if (!value.contains("continue_mode") || !value["continue_mode"].is_boolean()) {
+        throw std::runtime_error("chat draft " + filename + ": invalid continue_mode");
+    }
+    if (!value.contains("send_date") || !value["send_date"].is_string()) {
+        throw std::runtime_error("chat draft " + filename + ": invalid send_date");
+    }
+    if (!value.contains("base_messages") || !value["base_messages"].is_number_integer() ||
+        value["base_messages"].get<long long>() < 0) {
+        throw std::runtime_error("chat draft " + filename + ": invalid base_messages");
+    }
+
+    ChatDraft draft;
+    draft.text = value["text"].get<std::string>();
+    draft.continue_mode = value["continue_mode"].get<bool>();
+    draft.send_date = value["send_date"].get<std::string>();
+    draft.base_messages =
+        static_cast<std::size_t>(value["base_messages"].get<long long>());
+    return draft;
+}
+
+void ChatStore::clear_draft(const std::string& character, const std::string& filename) const {
+    std::error_code error;
+    fs::remove(draft_path(character, filename), error);
 }
 
 std::vector<std::string> ChatStore::list(const std::string& character) const {
@@ -191,6 +251,7 @@ void ChatStore::save(const std::string& character,
     }
 
     write_file_atomic(safe_join(chat_dir(character), filename), output);
+    clear_draft(character, filename);
 }
 
 Chat ChatStore::create(const std::string& character,

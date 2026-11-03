@@ -34,6 +34,7 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C04 OpenAI-compatible streaming client | 04-stage-3-prompting-generation.md | yes | yes | f6fcff8 | SSE delta streaming, mid-stream provider error detection (`ee06e5b`), non-streaming fallback, cancellation, mock-server integration tests |
 | P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | afd7c8b | GTK3 window, paned layout, header/settings dialog, startup error handling, status bar, Xvfb smoke harness |
 | P09 Single-instance and data locking | 08-v0.1.1-reliability.md | yes | yes | pending | Advisory `flock` instance lock with holder PID plus per-chat write locks; second writer fails cleanly |
+| P10 Crash recovery and autosave journal | 08-v0.1.1-reliability.md | yes | yes | pending | Atomic per-chunk draft journal under `.journal`, base-message staleness check, recovery on chat load |
 
 ## v0.1 completion
 

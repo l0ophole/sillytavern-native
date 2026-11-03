@@ -116,6 +116,22 @@ void ChatSession::append_assistant(const std::string& text) {
     chat_.messages.push_back(make_message(card_.name, false, text));
 }
 
+bool ChatSession::recover_draft(const ChatDraft& draft) {
+    if (draft.text.empty() || draft.base_messages != chat_.messages.size()) {
+        return false;
+    }
+    if (draft.continue_mode && can_continue()) {
+        append_to_last_assistant(draft.text);
+        return true;
+    }
+    ChatMessage message = make_message(card_.name, false, draft.text);
+    if (!draft.send_date.empty()) {
+        message.send_date = draft.send_date;
+    }
+    chat_.messages.push_back(std::move(message));
+    return true;
+}
+
 void ChatSession::save() const {
     store_.save(character_, filename_, chat_);
 }

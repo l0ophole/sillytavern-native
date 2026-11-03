@@ -256,6 +256,62 @@ TEST(chat_lock_path_rejects_unsafe_filename) {
     CHECK(threw);
 }
 
+TEST(chat_draft_roundtrip) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const st::ChatDraft draft{"partial reply", true, "2026-11-01T00:00:02Z", 2};
+    store.save_draft("Seraphina", "chat.jsonl", draft);
+    const auto loaded = store.load_draft("Seraphina", "chat.jsonl");
+    CHECK(loaded.has_value());
+    CHECK_EQ(loaded->text, "partial reply");
+    CHECK(loaded->continue_mode);
+    CHECK_EQ(loaded->send_date, "2026-11-01T00:00:02Z");
+    CHECK_EQ(loaded->base_messages, std::size_t(2));
+    store.clear_draft("Seraphina", "chat.jsonl");
+    CHECK(!store.load_draft("Seraphina", "chat.jsonl").has_value());
+}
+
+TEST(chat_save_clears_draft) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const st::Chat chat = store.create("Seraphina", "User", "Hello.");
+    store.save_draft("Seraphina", "chat.jsonl", st::ChatDraft{"partial", false, "", 0});
+    store.save("Seraphina", "chat.jsonl", chat);
+    CHECK(!store.load_draft("Seraphina", "chat.jsonl").has_value());
+}
+
+TEST(chat_draft_rejects_path_escape) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const st::ChatDraft draft{"partial", false, "", 0};
+    bool threw = false;
+    try {
+        store.save_draft("Seraphina", "../escape.jsonl", draft);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
+
+    const auto path = store.draft_path("../outside", "chat.jsonl");
+    CHECK_EQ(path.parent_path().parent_path().parent_path(), temp.path());
+}
+
+TEST(chat_draft_rejects_oversized_file) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto path = store.draft_path("Seraphina", "chat.jsonl");
+    st::write_file_atomic(path, "");
+    std::filesystem::resize_file(path, 16u * 1024u * 1024u + 1u);
+    bool threw = false;
+    try {
+        (void)store.load_draft("Seraphina", "chat.jsonl");
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        CHECK(std::string(error.what()).find("too large") != std::string::npos);
+    }
+    CHECK(threw);
+}
+
 TEST(chat_rename_refuses_to_overwrite) {
     TempDir temp;
     st::ChatStore store(temp.path());

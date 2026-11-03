@@ -348,6 +348,83 @@ TEST(session_continuation_adds_separator) {
     CHECK_EQ(session.chat().messages.back().mes, "Hello world again!");
 }
 
+TEST(session_recover_draft_appends_partial) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello.");
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.send_date = "2026-11-01T00:00:01Z";
+    user.mes = "Hi";
+    chat.messages.push_back(user);
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    const st::ChatDraft draft{"partial reply", false, "2026-11-01T00:00:02Z", 2};
+    CHECK(session.recover_draft(draft));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(3));
+    const st::ChatMessage& last = session.chat().messages.back();
+    CHECK_EQ(last.name, "Seraphina");
+    CHECK(!last.is_user);
+    CHECK(!last.is_system);
+    CHECK_EQ(last.send_date, "2026-11-01T00:00:02Z");
+    CHECK_EQ(last.mes, "partial reply");
+}
+
+TEST(session_recover_draft_continues_without_separator_duplication) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.mes = "Hello";
+    chat.messages = {assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.recover_draft(st::ChatDraft{"world", true, "", 1}));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(1));
+    CHECK_EQ(session.chat().messages.back().mes, "Hello world");
+
+    st::Chat spaced = chat;
+    spaced.messages[0].mes = "Hello ";
+    st::ChatSession spaced_session(
+        make_card(), settings, store, "Seraphina", "spaced.jsonl", spaced);
+    CHECK(spaced_session.recover_draft(st::ChatDraft{"world", true, "", 1}));
+    CHECK_EQ(spaced_session.chat().messages.back().mes, "Hello world");
+}
+
+TEST(session_recover_draft_rejects_stale_base) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage greeting;
+    greeting.name = "Seraphina";
+    greeting.mes = "Hello";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.mes = "Hi";
+    chat.messages = {greeting, user};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(!session.recover_draft(st::ChatDraft{"stale reply", false, "", 1}));
+    CHECK_EQ(session.chat().messages.size(), std::size_t(2));
+    CHECK_EQ(session.chat().messages.back().mes, "Hi");
+    CHECK(session.chat().messages.back().is_user);
+}
+
 TEST(session_continue_requires_assistant_tail) {
     TempDir temp;
     st::ChatStore store(temp.path());

@@ -18,7 +18,7 @@ dependency edge is listed in both directions.
 | Critical features | 19 |
 | v0.1 target features | 19 |
 | v0.1.1 target features | 2 |
-| Ported features | 20 |
+| Ported features | 21 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -100,7 +100,7 @@ feature IDs; names are in the same table.
 | P07 | HTTP/TLS and SSE transport | **yes** | v0.1 | ported | P03, P04 | B01, B02, B03, B04, B05, B06, B12, C04, C27, C37, O03, U08, U09, U10, U11, U17 |
 | P08 | GTK application shell and navigation | **yes** | v0.1 | ported | P01 | C02, D02, P12, P13, P14, U01, U02, U03, U04, U05 |
 | P09 | Single-instance and data locking | no | v0.1.1 | ported | P02 | — |
-| P10 | Crash recovery and autosave journal | no | v0.1.1 | planned | P02 | — |
+| P10 | Crash recovery and autosave journal | no | v0.1.1 | ported | P02 | — |
 | P11 | Packaging and install targets | no | later | planned | P01 | — |
 | P12 | Internationalization | no | later | planned | P08 | — |
 | P13 | Accessibility | no | later | planned | P08 | — |

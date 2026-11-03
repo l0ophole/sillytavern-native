@@ -8,6 +8,7 @@
 #include <gtkmm.h>
 #include <glibmm/dispatcher.h>
 
+#include <chrono>
 #include <functional>
 #include <cstddef>
 #include <memory>
@@ -56,6 +57,7 @@ private:
     void finish_generation(const st::OpenAiResult& result);
     void stop_streaming();
     std::string collect_streaming_text();
+    void maybe_save_draft();
 
     bool create_new_chat(bool announce);
     bool load_chat(const std::string& filename);
@@ -119,6 +121,10 @@ private:
     std::string streaming_text_;
     bool continue_mode_ = false;
     bool updating_selector_ = false;
+    std::string draft_send_date_;
+    std::size_t base_messages_ = 0;
+    bool draft_saved_ = false;
+    std::chrono::steady_clock::time_point last_draft_save_;
 };
 
 }  // namespace ui

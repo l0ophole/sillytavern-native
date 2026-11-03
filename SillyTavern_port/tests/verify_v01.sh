@@ -26,10 +26,10 @@ v011 = [feature for feature in features if feature["target"] == "0.1.1"]
 errors = []
 if len(features) != 105:
     errors.append(f"expected 105 features, found {len(features)}")
-if len(ported) != 20:
-    errors.append(f"expected 20 ported features, found {len(ported)}")
-if len(planned) != 85:
-    errors.append(f"expected 85 planned features, found {len(planned)}")
+if len(ported) != 21:
+    errors.append(f"expected 21 ported features, found {len(ported)}")
+if len(planned) != 84:
+    errors.append(f"expected 84 planned features, found {len(planned)}")
 if len(v011) != 2:
     errors.append(f"expected 2 v0.1.1 target features, found {len(v011)}")
 
