@@ -26,7 +26,8 @@ Node.js, no embedded original frontend. The application lives in
 - `v0.1.1` released and tagged at `e1f9096` (`fix(core): bound aggregate
   streamed response size`). Host and Alpine gates pass; 155 unit tests; 12
   smoke markers.
-- `main` and `port/v0.1` both point at `e1f9096` (fast-forwarded).
+- `main` and `port/v0.1` are kept equal (fast-forwarded); tag `v0.1.1` is
+  the release commit `e1f9096`.
 - Remote `origin` = `https://github.com/l0ophole/sillytavern-native.git`.
 - Registry: 105 features, 21 ported, 84 planned, targets 19 `0.1` + 2 `0.1.1`
   (`P09`, `P10`). All 19 critical v0.1 features are ported.
