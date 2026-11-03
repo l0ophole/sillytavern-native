@@ -3,6 +3,11 @@ AR ?= ar
 CXXFLAGS ?= -O2 -g
 CXXFLAGS += -std=c++17 -Wall -Wextra -Wpedantic -Ithird_party -Isrc -MMD -MP
 LDFLAGS ?=
+SANITIZE ?= 0
+ifeq ($(SANITIZE),1)
+CXXFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
+LDFLAGS += -fsanitize=address,undefined
+endif
 BUILD := build
 NCURSES_LIBS := $(shell pkg-config --libs ncursesw 2>/dev/null || echo -lncurses)
 CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
@@ -18,7 +23,7 @@ UI_OBJS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(UI_SRCS))
 TEST_SRCS := $(wildcard tests/test_*.cpp)
 TEST_OBJS := $(patsubst tests/%.cpp,$(BUILD)/tests/%.o,$(TEST_SRCS))
 
-.PHONY: all menuconfig defconfig test smoke clean help
+.PHONY: all menuconfig defconfig test test-sanitize smoke clean help
 
 all: $(BUILD)/sillytavern-port
 
@@ -26,7 +31,7 @@ $(BUILD):
 	@mkdir -p $(BUILD)
 
 $(BUILD)/menuconfig: tools/menuconfig.cpp | $(BUILD)
-	$(CXX) $(CXXFLAGS) $< -o $@ $(NCURSES_LIBS)
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS) $(NCURSES_LIBS)
 
 $(BUILD)/.configured: $(BUILD)/menuconfig features/features.json
 	$(BUILD)/menuconfig --defaults --config .config --header $(BUILD)/features.h
@@ -56,13 +61,18 @@ $(BUILD)/tests/%.o: tests/%.cpp | $(BUILD)
 	$(CXX) $(CXXFLAGS) -Itests -c $< -o $@
 
 $(BUILD)/sillytavern-port: src/main.cpp $(UI_OBJS) $(BUILD)/features.h $(CORE_LIB) | check-gtkmm
-	$(CXX) $(CXXFLAGS) $(GTKMM_CFLAGS) src/main.cpp $(UI_OBJS) $(CORE_LIB) -o $@ $(CORE_LIBS) $(GTKMM_LIBS)
+	$(CXX) $(CXXFLAGS) $(GTKMM_CFLAGS) src/main.cpp $(UI_OBJS) $(CORE_LIB) -o $@ $(LDFLAGS) $(CORE_LIBS) $(GTKMM_LIBS)
 
 $(BUILD)/run_tests: $(TEST_OBJS) $(CORE_LIB) | $(BUILD)
-	$(CXX) $(CXXFLAGS) $(TEST_OBJS) $(CORE_LIB) -o $@ $(CORE_LIBS)
+	$(CXX) $(CXXFLAGS) $(TEST_OBJS) $(CORE_LIB) -o $@ $(LDFLAGS) $(CORE_LIBS)
 
 test: $(BUILD)/run_tests
 	./$(BUILD)/run_tests
+
+test-sanitize:
+	$(MAKE) clean
+	$(MAKE) $(BUILD)/run_tests SANITIZE=1
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 ./$(BUILD)/run_tests
 
 smoke: $(BUILD)/sillytavern-port
 	./tests/smoke_gtk.sh
@@ -83,6 +93,7 @@ help:
 	@echo "  make menuconfig   edit the feature configuration"
 	@echo "  make defconfig    reset to all ported critical features"
 	@echo "  make test         build and run unit tests"
+	@echo "  make test-sanitize  build and run unit tests with ASan/UBSan"
 	@echo "  make smoke        run the GUI smoke test (GTK stage)"
 	@echo "  make clean        remove build artifacts"
 

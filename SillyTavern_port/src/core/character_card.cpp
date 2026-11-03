@@ -58,6 +58,7 @@ CharacterCard parse_png(const std::string& bytes, const std::string& context) {
     std::size_t offset = 8;
     std::string chara_text;
     std::string ccv3_text;
+    bool saw_iend = false;
 
     while (offset < bytes.size()) {
         if (bytes.size() - offset < 8) {
@@ -88,8 +89,13 @@ CharacterCard parse_png(const std::string& bytes, const std::string& context) {
                 }
             }
         } else if (type == "IEND") {
+            saw_iend = true;
             break;
         }
+    }
+
+    if (!saw_iend) {
+        throw std::runtime_error(context + ": truncated PNG (missing IEND)");
     }
 
     const std::string& selected = !ccv3_text.empty() ? ccv3_text : chara_text;
