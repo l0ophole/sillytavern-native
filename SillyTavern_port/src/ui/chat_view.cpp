@@ -971,14 +971,13 @@ std::string ChatView::new_chat_filename() const {
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M-%S", &utc);
 
     const std::string base(buffer);
-    std::string candidate = base + ".jsonl";
-    const std::vector<std::string> existing = chats_.list(character_key_);
+    std::string result = base + ".jsonl";
     int suffix = 2;
-    while (std::find(existing.begin(), existing.end(), candidate) != existing.end()) {
-        candidate = base + "-" + std::to_string(suffix) + ".jsonl";
+    while (chats_.exists(character_key_, result)) {
+        result = base + "-" + std::to_string(suffix) + ".jsonl";
         ++suffix;
     }
-    return candidate;
+    return result;
 }
 
 void ChatView::refresh_selector() {

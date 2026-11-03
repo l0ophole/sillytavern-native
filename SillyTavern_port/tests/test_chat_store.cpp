@@ -342,3 +342,33 @@ TEST(chat_rename_refuses_to_overwrite) {
     CHECK(threw);
     CHECK_EQ(store.list("Seraphina").size(), std::size_t(2));
 }
+
+TEST(chat_store_remove_clears_draft) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto chat = store.create("char", "User", "Hi");
+    store.save("char", "chat.jsonl", chat);
+    store.save_draft("char", "chat.jsonl", st::ChatDraft{"partial", false, "", 0});
+    CHECK(std::filesystem::exists(store.draft_path("char", "chat.jsonl")));
+    store.remove("char", "chat.jsonl");
+    CHECK(!std::filesystem::exists(store.draft_path("char", "chat.jsonl")));
+}
+
+TEST(chat_store_rename_moves_draft) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto chat = store.create("char", "User", "Hi");
+    store.save("char", "from.jsonl", chat);
+    store.save_draft("char", "from.jsonl", st::ChatDraft{"partial", false, "", 0});
+    store.rename("char", "from.jsonl", "to.jsonl");
+    CHECK(!std::filesystem::exists(store.draft_path("char", "from.jsonl")));
+    CHECK(std::filesystem::exists(store.draft_path("char", "to.jsonl")));
+}
+
+TEST(chat_store_exists_sees_draft_only_name) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    store.save_draft("char", "pending.jsonl", st::ChatDraft{"pending", false, "", 0});
+    CHECK(store.exists("char", "pending.jsonl"));
+    CHECK(!store.exists("char", "missing.jsonl"));
+}
