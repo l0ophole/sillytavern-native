@@ -113,6 +113,7 @@ void ChatStore::save_draft(const std::string& character,
     value["continue_mode"] = draft.continue_mode;
     value["send_date"] = draft.send_date;
     value["base_messages"] = draft.base_messages;
+    value["replace_last"] = draft.replace_last;
     const std::string payload = dump_json(value) + "\n";
     if (payload.size() > kMaxDraftBytes) {
         throw std::runtime_error("chat draft exceeds 16 MiB limit");
@@ -147,12 +148,18 @@ std::optional<ChatDraft> ChatStore::load_draft(const std::string& character,
         throw std::runtime_error("chat draft " + filename + ": invalid base_messages");
     }
 
+    if (value.contains("replace_last") && !value["replace_last"].is_boolean()) {
+        throw std::runtime_error("chat draft " + filename + ": invalid replace_last");
+    }
+
     ChatDraft draft;
     draft.text = value["text"].get<std::string>();
     draft.continue_mode = value["continue_mode"].get<bool>();
     draft.send_date = value["send_date"].get<std::string>();
     draft.base_messages =
         static_cast<std::size_t>(value["base_messages"].get<long long>());
+    draft.replace_last =
+        value.contains("replace_last") && value["replace_last"].get<bool>();
     return draft;
 }
 

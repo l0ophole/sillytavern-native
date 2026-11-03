@@ -372,3 +372,57 @@ TEST(chat_store_exists_sees_draft_only_name) {
     CHECK(store.exists("char", "pending.jsonl"));
     CHECK(!store.exists("char", "missing.jsonl"));
 }
+
+TEST(chat_draft_replace_last_round_trips) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    st::ChatDraft draft;
+    draft.text = "partial";
+    draft.base_messages = 2;
+    draft.replace_last = true;
+    store.save_draft("char", "chat.jsonl", draft);
+    const auto loaded = store.load_draft("char", "chat.jsonl");
+    CHECK(loaded.has_value());
+    CHECK(loaded->replace_last);
+    CHECK_EQ(loaded->text, "partial");
+    CHECK_EQ(loaded->base_messages, std::size_t(2));
+
+    st::ChatDraft plain;
+    plain.text = "other";
+    plain.base_messages = 0;
+    plain.replace_last = false;
+    store.save_draft("char", "plain.jsonl", plain);
+    const auto loaded_plain = store.load_draft("char", "plain.jsonl");
+    CHECK(loaded_plain.has_value());
+    CHECK(!loaded_plain->replace_last);
+}
+
+TEST(chat_draft_missing_replace_last_loads_false) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    // Write a legacy draft file without the replace_last key.
+    const auto path = store.draft_path("char", "chat.jsonl");
+    st::write_file_atomic(path,
+                          R"({"text":"legacy","continue_mode":false,"send_date":"","base_messages":0})" "\n");
+    const auto loaded = store.load_draft("char", "chat.jsonl");
+    CHECK(loaded.has_value());
+    CHECK_EQ(loaded->text, "legacy");
+    CHECK(!loaded->replace_last);
+}
+
+TEST(chat_draft_replace_last_requires_boolean) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto path = store.draft_path("char", "chat.jsonl");
+    st::write_file_atomic(path,
+                          R"({"text":"x","continue_mode":false,"send_date":"","base_messages":0,"replace_last":"yes"})" "\n");
+    bool threw = false;
+    try {
+        (void)store.load_draft("char", "chat.jsonl");
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        const std::string message = error.what();
+        CHECK(message.find("invalid replace_last") != std::string::npos);
+    }
+    CHECK(threw);
+}

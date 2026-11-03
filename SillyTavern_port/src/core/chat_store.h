@@ -15,6 +15,7 @@ struct ChatDraft {
     bool continue_mode = false;
     std::string send_date;
     std::size_t base_messages = 0;
+    bool replace_last = false;
 };
 
 class ChatStore {

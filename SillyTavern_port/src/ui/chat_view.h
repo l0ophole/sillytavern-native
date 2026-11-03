@@ -145,6 +145,7 @@ private:
     bool updating_selector_ = false;
     std::string draft_send_date_;
     std::size_t base_messages_ = 0;
+    bool draft_replace_last_ = false;
     st::DraftThrottle draft_throttle_;
 
     Glib::Dispatcher load_dispatcher_;
