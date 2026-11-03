@@ -173,7 +173,12 @@ OpenAiResult OpenAiClient::generate(const OpenAiRequest& request,
     HttpDataCallback data_callback;
     if (request.sampling.stream) {
         data_callback = [&parser, &state](const char* data, std::size_t size) {
-            for (const SseEvent& event : parser.feed(data, size)) {
+            const std::vector<SseEvent> events = parser.feed(data, size);
+            if (parser.failed()) {
+                state.error = parser.error();
+                return false;
+            }
+            for (const SseEvent& event : events) {
                 if (!handle_event(event, state)) {
                     return false;
                 }
@@ -200,6 +205,9 @@ OpenAiResult OpenAiClient::generate(const OpenAiRequest& request,
             if (!handle_event(event, state)) {
                 break;
             }
+        }
+        if (parser.failed() && state.error.empty()) {
+            state.error = parser.error();
         }
         result.text = state.text;
         if (state.done) {

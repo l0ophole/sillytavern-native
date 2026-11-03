@@ -2,9 +2,15 @@
 
 namespace st {
 
+SseParser::SseParser(std::size_t max_event_bytes) : max_event_bytes_(max_event_bytes) {}
+
 std::vector<SseEvent> SseParser::feed(const char* data, std::size_t size) {
     std::vector<SseEvent> events;
-    if (data == nullptr || size == 0) {
+    if (failed_ || data == nullptr || size == 0) {
+        return events;
+    }
+    if (buffer_.size() > max_event_bytes_ || size > max_event_bytes_ - buffer_.size()) {
+        fail();
         return events;
     }
     buffer_.append(data, size);
@@ -26,11 +32,17 @@ std::vector<SseEvent> SseParser::feed(const char* data, std::size_t size) {
             // Consume the CR now but remember it: the next feed may begin with
             // the LF of a CRLF pair, which must count as the same terminator.
             process_line(buffer_.substr(start, terminator - start), events);
+            if (failed_) {
+                return events;
+            }
             start = terminator + 1;
             pending_cr_ = true;
             break;
         }
         process_line(buffer_.substr(start, terminator - start), events);
+        if (failed_) {
+            return events;
+        }
         std::size_t next = terminator + 1;
         if (is_cr && buffer_[next] == '\n') {
             ++next;
@@ -47,6 +59,9 @@ std::vector<SseEvent> SseParser::feed(const std::string& data) {
 
 std::vector<SseEvent> SseParser::finish() {
     std::vector<SseEvent> events;
+    if (failed_) {
+        return events;
+    }
     pending_cr_ = false;
     if (!buffer_.empty()) {
         std::string line = buffer_;
@@ -55,12 +70,27 @@ std::vector<SseEvent> SseParser::finish() {
             line.pop_back();
         }
         process_line(line, events);
+        if (failed_) {
+            return events;
+        }
     }
     dispatch(events);
     return events;
 }
 
 void SseParser::reset() {
+    failed_ = false;
+    error_.clear();
+    buffer_.clear();
+    event_name_.clear();
+    data_.clear();
+    has_data_ = false;
+    pending_cr_ = false;
+}
+
+void SseParser::fail() {
+    failed_ = true;
+    error_ = "SSE event exceeds size limit";
     buffer_.clear();
     event_name_.clear();
     data_.clear();
@@ -88,6 +118,11 @@ void SseParser::process_line(const std::string& line, std::vector<SseEvent>& eve
     }
 
     if (field == "data") {
+        const std::size_t extra = (has_data_ ? 1 : 0) + value.size();
+        if (data_.size() > max_event_bytes_ || extra > max_event_bytes_ - data_.size()) {
+            fail();
+            return;
+        }
         if (has_data_) {
             data_ += '\n';
         }

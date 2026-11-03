@@ -71,6 +71,32 @@ TEST(sse_handles_split_crlf) {
     CHECK_EQ(events[0].data, "hello");
 }
 
+TEST(sse_rejects_oversized_unterminated_line) {
+    st::SseParser parser(16);
+    CHECK(parser.feed("data: hello ").empty());
+    CHECK(!parser.failed());
+    const auto events = parser.feed("world");
+    CHECK(events.empty());
+    CHECK(parser.failed());
+    CHECK(parser.error().find("exceeds") != std::string::npos);
+    CHECK(parser.finish().empty());
+    parser.reset();
+    CHECK(!parser.failed());
+    CHECK(parser.error().empty());
+}
+
+TEST(sse_rejects_oversized_multiline_data) {
+    st::SseParser parser(24);
+    CHECK(parser.feed("data: 123456789\n").empty());
+    CHECK(parser.feed("data: 123456789\n").empty());
+    CHECK(!parser.failed());
+    const auto events = parser.feed("data: 123456789\n");
+    CHECK(events.empty());
+    CHECK(parser.failed());
+    CHECK(parser.error().find("exceeds") != std::string::npos);
+    CHECK(parser.finish().empty());
+}
+
 TEST(sse_feed_bytes_handles_embedded_nul) {
     st::SseParser parser;
     const char chunk[] = {'d', 'a', 't', 'a', ':', ' ', 'a', '\0', 'b', '\n', '\n'};
