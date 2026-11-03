@@ -58,6 +58,11 @@ if ! grep -q 'smoke: async library scan' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: scan failure' <<<"$output"; then
+    echo "smoke test failed: scan failure not reported" >&2
+    exit 1
+fi
+
 if ! grep -q 'smoke: chat round-trip' <<<"$output"; then
     echo "smoke test failed: chat round-trip failed" >&2
     exit 1

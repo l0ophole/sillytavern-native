@@ -215,6 +215,31 @@ int run_smoke_test() {
             std::cout << "smoke: async library scan\n";
         }
 
+        {
+            const std::filesystem::path not_a_dir = root.path() / "not-a-directory";
+            st::write_file_atomic(not_a_dir, "not a directory");
+            st::CharacterStore bad_store(not_a_dir);
+            CharacterList bad_list(
+                window,
+                bad_store,
+                [](const st::CharacterEntry&) {},
+                [](const st::CharacterEntry*) {});
+            bad_list.refresh_async();
+
+            const gint64 fail_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (bad_list.is_scanning() && g_get_monotonic_time() < fail_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (bad_list.is_scanning() || !bad_list.scan_failed() ||
+                bad_list.scan_error().empty()) {
+                std::cerr << "smoke: scan failure not reported\n";
+                return 1;
+            }
+            std::cout << "smoke: scan failure\n";
+        }
+
         st::Chat smoke_chat = chats.create(entry.card.name,
                                            st::normalize_user_name(settings.user_name),
                                            entry.card.first_mes);

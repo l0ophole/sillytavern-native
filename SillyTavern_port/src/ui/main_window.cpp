@@ -38,7 +38,13 @@ MainWindow::MainWindow(st::Paths paths,
         [this](const CharacterEntry* entry) {
             if (entry == nullptr) {
                 chat_view_->clear();
-                status_.set_text("No characters");
+                if (character_list_->scan_failed()) {
+                    status_.set_text(st::redact_secrets(
+                        "Character scan failed: " + character_list_->scan_error(),
+                        {settings_.api_key}));
+                } else {
+                    status_.set_text("No characters");
+                }
             }
         });
 

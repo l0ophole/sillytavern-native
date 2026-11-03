@@ -36,6 +36,11 @@ std::vector<CharacterEntry> CharacterStore::list() const {
     std::vector<CharacterEntry> entries;
     std::error_code error;
     if (!fs::is_directory(characters_dir_, error)) {
+        std::error_code exist_error;
+        if (fs::exists(characters_dir_, exist_error)) {
+            throw std::runtime_error("character directory is not a directory: " +
+                                     characters_dir_.string());
+        }
         return entries;
     }
 

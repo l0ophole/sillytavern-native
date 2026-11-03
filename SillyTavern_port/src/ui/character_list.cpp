@@ -74,8 +74,17 @@ void CharacterList::refresh() {
         scan_entries_.clear();
         scan_error_.clear();
     }
+    scan_failed_ = false;
+    scan_error_text_.clear();
     scanning_ = false;
-    all_ = store_.list();
+    try {
+        all_ = store_.list();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("character scan failed: ") + error.what());
+        scan_failed_ = true;
+        scan_error_text_ = error.what();
+        all_.clear();
+    }
     apply_filter();
 }
 
@@ -94,6 +103,8 @@ void CharacterList::refresh_async() {
         scan_entries_.clear();
         scan_error_.clear();
     }
+    scan_failed_ = false;
+    scan_error_text_.clear();
     scanning_ = true;
 
     try {
@@ -136,7 +147,10 @@ void CharacterList::on_scan_ready() {
             return;
         }
         if (scan_ready_generation_ != scan_generation_) {
-            // A synchronous refresh superseded this scan; drop the stale result.
+            // Stale result: only drop the pending result. Do not join the
+            // worker and do not touch scanning_ — a newer scan owns the
+            // worker and the flag, so returning here must not hang or
+            // clear a scan still in progress.
             scan_ready_ = false;
             scan_entries_.clear();
             scan_error_.clear();
@@ -153,6 +167,8 @@ void CharacterList::on_scan_ready() {
         scan_worker_.join();
     }
 
+    scan_failed_ = !error.empty();
+    scan_error_text_ = error;
     if (!error.empty()) {
         st::log_write(st::LogLevel::Error, std::string("character scan failed: ") + error);
     }

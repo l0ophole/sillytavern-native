@@ -27,6 +27,8 @@ public:
     void refresh();
     void refresh_async();
     bool is_scanning() const { return scanning_.load(); }
+    bool scan_failed() const { return scan_failed_; }
+    const std::string& scan_error() const { return scan_error_text_; }
     void select_first();
     void select_id(const std::string& id);
     void set_search_text(const std::string& text);
@@ -58,6 +60,8 @@ private:
     std::mutex scan_mutex_;
     std::vector<CharacterEntry> scan_entries_;
     std::string scan_error_;
+    bool scan_failed_ = false;
+    std::string scan_error_text_;
     bool scan_ready_ = false;
     std::uint64_t scan_ready_generation_ = 0;
     std::atomic<bool> scanning_{false};
