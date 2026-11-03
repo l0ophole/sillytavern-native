@@ -25,6 +25,10 @@ MainWindow::MainWindow(st::Paths paths,
     header_.pack_end(settings_button_);
     set_titlebar(header_);
 
+    chat_view_ = std::make_unique<ChatView>(
+        chats_, settings_, [this](const std::string& text) {
+            status_.set_text(st::redact_secrets(text, {settings_.api_key}));
+        });
     character_list_ = std::make_unique<CharacterList>(
         *this,
         characters_,
@@ -34,11 +38,8 @@ MainWindow::MainWindow(st::Paths paths,
         [this](const CharacterEntry* entry) {
             if (entry == nullptr) {
                 chat_view_->clear();
+                status_.set_text("No characters");
             }
-        });
-    chat_view_ = std::make_unique<ChatView>(
-        chats_, settings_, [this](const std::string& text) {
-            status_.set_text(st::redact_secrets(text, {settings_.api_key}));
         });
 
     paned_.set_position(320);
@@ -61,12 +62,9 @@ MainWindow::MainWindow(st::Paths paths,
     settings_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_settings));
 
-    character_list_->refresh();
-    if (character_list_->empty()) {
-        chat_view_->clear();
-    } else {
-        character_list_->select_first();
-    }
+    chat_view_->clear();
+    status_.set_text("Loading characters...");
+    character_list_->refresh_async();
 
     show_all_children();
 }

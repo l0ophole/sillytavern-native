@@ -194,6 +194,27 @@ int run_smoke_test() {
         }
         std::cout << "smoke: character loaded\n";
 
+        {
+            CharacterList async_list(
+                window,
+                characters,
+                [](const st::CharacterEntry&) {},
+                [](const st::CharacterEntry*) {});
+            async_list.refresh_async();
+
+            const gint64 scan_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (async_list.is_scanning() && g_get_monotonic_time() < scan_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (async_list.is_scanning() || async_list.visible_entries().empty()) {
+                std::cerr << "smoke: async library scan failed\n";
+                return 1;
+            }
+            std::cout << "smoke: async library scan\n";
+        }
+
         st::Chat smoke_chat = chats.create(entry.card.name,
                                            st::normalize_user_name(settings.user_name),
                                            entry.card.first_mes);

@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <string>
+#include <utility>
 
 namespace st {
 namespace ui {
@@ -19,6 +20,8 @@ CharacterList::CharacterList(Gtk::Window& parent,
       store_(store),
       on_selected_(std::move(on_selected)),
       on_changed_(std::move(on_changed)) {
+    scan_dispatcher_.connect(sigc::mem_fun(*this, &CharacterList::on_scan_ready));
+
     header_.set_spacing(6);
     header_.set_margin_top(6);
     header_.set_margin_bottom(6);
@@ -52,9 +55,120 @@ CharacterList::CharacterList(Gtk::Window& parent,
     show_all_children();
 }
 
+CharacterList::~CharacterList() {
+    ++scan_generation_;
+    scanning_ = false;
+    if (scan_worker_.joinable()) {
+        scan_worker_.join();
+    }
+}
+
 void CharacterList::refresh() {
+    ++scan_generation_;
+    if (scan_worker_.joinable()) {
+        scan_worker_.join();
+    }
+    {
+        std::lock_guard<std::mutex> lock(scan_mutex_);
+        scan_ready_ = false;
+        scan_entries_.clear();
+        scan_error_.clear();
+    }
+    scanning_ = false;
     all_ = store_.list();
     apply_filter();
+}
+
+void CharacterList::refresh_async() {
+    if (scan_worker_.joinable()) {
+        // A scan is already in flight (or its dispatcher is queued); its result
+        // is still current, so there is no need to start another one.
+        return;
+    }
+
+    ++scan_generation_;
+    const std::uint64_t generation = scan_generation_;
+    {
+        std::lock_guard<std::mutex> lock(scan_mutex_);
+        scan_ready_ = false;
+        scan_entries_.clear();
+        scan_error_.clear();
+    }
+    scanning_ = true;
+
+    try {
+        scan_worker_ = std::thread([this, generation]() {
+            scan_in_background(generation);
+        });
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("character scan start failed: ") + error.what());
+        scanning_ = false;
+        refresh();
+    }
+}
+
+void CharacterList::scan_in_background(std::uint64_t generation) {
+    std::vector<CharacterEntry> entries;
+    std::string error;
+    try {
+        entries = store_.list();
+    } catch (const std::exception& failure) {
+        error = failure.what();
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(scan_mutex_);
+        scan_entries_ = std::move(entries);
+        scan_error_ = std::move(error);
+        scan_ready_generation_ = generation;
+        scan_ready_ = true;
+    }
+    scan_dispatcher_.emit();
+}
+
+void CharacterList::on_scan_ready() {
+    std::vector<CharacterEntry> entries;
+    std::string error;
+    {
+        std::lock_guard<std::mutex> lock(scan_mutex_);
+        if (!scan_ready_) {
+            return;
+        }
+        if (scan_ready_generation_ != scan_generation_) {
+            // A synchronous refresh superseded this scan; drop the stale result.
+            scan_ready_ = false;
+            scan_entries_.clear();
+            scan_error_.clear();
+            return;
+        }
+        entries = std::move(scan_entries_);
+        scan_entries_.clear();
+        error = std::move(scan_error_);
+        scan_error_.clear();
+        scan_ready_ = false;
+    }
+
+    if (scan_worker_.joinable()) {
+        scan_worker_.join();
+    }
+
+    if (!error.empty()) {
+        st::log_write(st::LogLevel::Error, std::string("character scan failed: ") + error);
+    }
+
+    all_ = std::move(entries);
+    apply_filter();
+
+    if (visible_.empty()) {
+        if (on_changed_) {
+            on_changed_(nullptr);
+        }
+    } else if (list_.get_selected_row() == nullptr) {
+        select_first();
+    }
+
+    scanning_ = false;
 }
 
 void CharacterList::select_first() {

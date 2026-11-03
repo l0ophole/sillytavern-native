@@ -3,8 +3,14 @@
 #include "core/character_store.h"
 
 #include <gtkmm.h>
+#include <glibmm/dispatcher.h>
 
+#include <atomic>
+#include <cstdint>
 #include <functional>
+#include <mutex>
+#include <string>
+#include <thread>
 #include <vector>
 
 namespace st {
@@ -16,8 +22,11 @@ public:
                   st::CharacterStore& store,
                   std::function<void(const CharacterEntry&)> on_selected,
                   std::function<void(const CharacterEntry*)> on_changed = {});
+    ~CharacterList() override;
 
     void refresh();
+    void refresh_async();
+    bool is_scanning() const { return scanning_.load(); }
     void select_first();
     void select_id(const std::string& id);
     void set_search_text(const std::string& text);
@@ -27,6 +36,8 @@ public:
     const std::vector<CharacterEntry>& visible_entries() const { return visible_; }
 
 private:
+    void scan_in_background(std::uint64_t generation);
+    void on_scan_ready();
     void apply_filter();
     void rebuild();
     void on_import_clicked();
@@ -41,6 +52,16 @@ private:
 
     std::vector<CharacterEntry> all_;
     std::vector<CharacterEntry> visible_;
+
+    Glib::Dispatcher scan_dispatcher_;
+    std::thread scan_worker_;
+    std::mutex scan_mutex_;
+    std::vector<CharacterEntry> scan_entries_;
+    std::string scan_error_;
+    bool scan_ready_ = false;
+    std::uint64_t scan_ready_generation_ = 0;
+    std::atomic<bool> scanning_{false};
+    std::uint64_t scan_generation_ = 0;
 
     Gtk::SearchEntry search_;
     Gtk::Button import_button_;
