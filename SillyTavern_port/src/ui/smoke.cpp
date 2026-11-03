@@ -395,6 +395,84 @@ int run_smoke_test() {
         }
 
         {
+            st::CharacterEntry stale_first;
+            stale_first.id = "stale-bot-a";
+            stale_first.card.name = "Stale A";
+            stale_first.card.first_mes = "Stale A.";
+            st::CharacterEntry stale_second;
+            stale_second.id = "stale-bot-b";
+            stale_second.card.name = "Stale B";
+            stale_second.card.first_mes = "Stale B.";
+
+            const std::string stale_user = st::normalize_user_name(settings.user_name);
+            chats.save("stale-bot-a",
+                       "stale-a.jsonl",
+                       chats.create("stale-bot-a", stale_user, stale_first.card.first_mes));
+            chats.save("stale-bot-b",
+                       "stale-b.jsonl",
+                       chats.create("stale-bot-b", stale_user, stale_second.card.first_mes));
+
+            ChatView stale_view(chats, settings, [](const std::string&) {});
+            stale_view.show_all();
+            stale_view.set_character_async(stale_first);
+            stale_view.set_character_async(stale_second);
+            stale_view.set_character_async(stale_second);
+
+            const gint64 stale_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (stale_view.is_loading() && g_get_monotonic_time() < stale_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (stale_view.is_loading() ||
+                stale_view.current_filename() != "stale-b.jsonl") {
+                std::cerr << "smoke: async stale load failed: "
+                          << stale_view.current_filename() << '\n';
+                return 1;
+            }
+            std::cout << "smoke: async stale load\n";
+        }
+
+        {
+            st::CharacterEntry malformed_entry;
+            malformed_entry.id = "malformed-bot";
+            malformed_entry.card.name = "Malformed Bot";
+            malformed_entry.card.first_mes = "Hi.";
+
+            const std::string malformed_user = st::normalize_user_name(settings.user_name);
+            chats.save("malformed-bot",
+                       "malformed.jsonl",
+                       chats.create("malformed-bot", malformed_user, "Hi."));
+            st::write_file_atomic(chats.draft_path("malformed-bot", "malformed.jsonl"), "{");
+
+            ChatView malformed_view(chats, settings, [](const std::string&) {});
+            malformed_view.show_all();
+            malformed_view.set_character_async(malformed_entry);
+
+            const gint64 malformed_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (malformed_view.is_loading() &&
+                   g_get_monotonic_time() < malformed_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (malformed_view.is_loading() ||
+                malformed_view.current_filename() != "malformed.jsonl" ||
+                std::filesystem::exists(chats.draft_path("malformed-bot", "malformed.jsonl"))) {
+                std::cerr << "smoke: malformed draft failed: "
+                          << malformed_view.current_filename() << '\n';
+                return 1;
+            }
+            const st::Chat malformed_loaded = chats.load("malformed-bot", "malformed.jsonl");
+            if (malformed_loaded.messages.size() != std::size_t(1) ||
+                malformed_loaded.messages.back().mes != "Hi.") {
+                std::cerr << "smoke: malformed draft failed: chat mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: malformed draft\n";
+        }
+
+        {
             const st::CharacterEntry second = characters.import_file(source);
             bool list_changed = false;
             CharacterList list_widget(

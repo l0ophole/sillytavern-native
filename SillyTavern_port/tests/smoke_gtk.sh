@@ -83,6 +83,16 @@ if ! grep -q 'smoke: async chat load' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: async stale load' <<<"$output"; then
+    echo "smoke test failed: async stale load failed" >&2
+    exit 1
+fi
+
+if ! grep -q 'smoke: malformed draft' <<<"$output"; then
+    echo "smoke test failed: malformed draft failed" >&2
+    exit 1
+fi
+
 if ! grep -q 'smoke: character delete' <<<"$output"; then
     echo "smoke test failed: character delete failed" >&2
     exit 1

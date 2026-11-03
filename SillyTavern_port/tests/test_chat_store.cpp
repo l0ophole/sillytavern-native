@@ -426,3 +426,28 @@ TEST(chat_draft_replace_last_requires_boolean) {
     }
     CHECK(threw);
 }
+
+TEST(chat_store_failed_save_keeps_previous_chat_file) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto chat_a = store.create("Seraphina", "User", "Chat A greeting.");
+    store.save("Seraphina", "chat.jsonl", chat_a);
+
+    auto lock = st::FileLock::try_acquire(store.lock_path("Seraphina", "chat.jsonl"));
+    CHECK(lock.has_value());
+
+    const auto chat_b = store.create("Seraphina", "User", "Chat B greeting.");
+    bool threw = false;
+    try {
+        store.save("Seraphina", "chat.jsonl", chat_b);
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        CHECK(std::string(error.what()).find("locked") != std::string::npos);
+    }
+    CHECK(threw);
+
+    lock.reset();
+    const auto loaded = store.load("Seraphina", "chat.jsonl");
+    CHECK_EQ(loaded.messages.size(), chat_a.messages.size());
+    CHECK_EQ(loaded.messages[0].mes, "Chat A greeting.");
+}
