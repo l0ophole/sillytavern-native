@@ -73,6 +73,11 @@ if ! grep -q 'smoke: chat lifecycle' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: async chat load' <<<"$output"; then
+    echo "smoke test failed: async chat load failed" >&2
+    exit 1
+fi
+
 if ! grep -q 'smoke: character delete' <<<"$output"; then
     echo "smoke test failed: character delete failed" >&2
     exit 1

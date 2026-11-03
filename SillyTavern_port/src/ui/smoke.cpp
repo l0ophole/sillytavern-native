@@ -294,13 +294,79 @@ int run_smoke_test() {
                 std::cerr << "smoke: renamed chat missing on disk\n";
                 return 1;
             }
-            if (!lifecycle_view.delete_current_chat() ||
-                lifecycle_view.current_filename().empty() ||
-                lifecycle_view.current_filename() == "renamed-chat.jsonl") {
+            chats.save(entry.id,
+                       "zzz-other.jsonl",
+                       chats.create(entry.id,
+                                    st::normalize_user_name(settings.user_name),
+                                    entry.card.first_mes));
+            if (!lifecycle_view.delete_current_chat()) {
+                std::cerr << "smoke: delete_current_chat failed: " << lifecycle_status << '\n';
+                return 1;
+            }
+            const gint64 delete_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (lifecycle_view.is_loading() &&
+                   g_get_monotonic_time() < delete_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (lifecycle_view.is_loading() ||
+                lifecycle_view.current_filename() != "zzz-other.jsonl") {
                 std::cerr << "smoke: delete_current_chat failed: " << lifecycle_status << '\n';
                 return 1;
             }
             std::cout << "smoke: chat lifecycle\n";
+        }
+
+        {
+            st::CharacterEntry async_first;
+            async_first.id = "async-bot-a";
+            async_first.card.name = "Async A";
+            async_first.card.first_mes = "A.";
+            st::CharacterEntry async_second;
+            async_second.id = "async-bot-b";
+            async_second.card.name = "Async B";
+            async_second.card.first_mes = "B.";
+
+            const std::string async_user = st::normalize_user_name(settings.user_name);
+            chats.save("async-bot-a",
+                       "async-a.jsonl",
+                       chats.create("async-bot-a", async_user, async_first.card.first_mes));
+            chats.save("async-bot-b",
+                       "async-b.jsonl",
+                       chats.create("async-bot-b", async_user, async_second.card.first_mes));
+
+            st::ChatDraft async_draft;
+            async_draft.text = "Recovered async reply";
+            async_draft.send_date = "2026-11-01T00:00:03Z";
+            async_draft.base_messages = 1;
+            chats.save_draft("async-bot-b", "async-b.jsonl", async_draft);
+
+            ChatView async_view(chats, settings, [](const std::string&) {});
+            async_view.show_all();
+            async_view.set_character_async(async_first);
+            async_view.set_character_async(async_second);
+
+            const gint64 load_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (async_view.is_loading() && g_get_monotonic_time() < load_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (async_view.is_loading() ||
+                async_view.current_filename() != "async-b.jsonl") {
+                std::cerr << "smoke: async chat load failed: "
+                          << async_view.current_filename() << '\n';
+                return 1;
+            }
+            const st::Chat async_loaded = chats.load("async-bot-b", "async-b.jsonl");
+            if (async_loaded.messages.size() != std::size_t(2) ||
+                async_loaded.messages.back().mes != "Recovered async reply" ||
+                chats.load_draft("async-bot-b", "async-b.jsonl").has_value()) {
+                std::cerr << "smoke: async chat load failed: draft recovery\n";
+                return 1;
+            }
+            std::cout << "smoke: async chat load\n";
         }
 
         {

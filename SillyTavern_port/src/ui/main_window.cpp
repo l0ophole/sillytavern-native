@@ -70,7 +70,7 @@ MainWindow::MainWindow(st::Paths paths,
 }
 
 void MainWindow::on_character_selected(const st::CharacterEntry& entry) {
-    if (chat_view_->set_character(entry)) {
+    if (chat_view_->set_character_async(entry)) {
         status_.set_text("Selected: " + entry.card.name);
     }
 }

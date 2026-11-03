@@ -9,6 +9,7 @@
 #include <glibmm/dispatcher.h>
 
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <cstddef>
 #include <memory>
@@ -29,6 +30,8 @@ public:
     ~ChatView() override;
 
     bool set_character(const st::CharacterEntry& entry);
+    bool set_character_async(const st::CharacterEntry& entry);
+    bool load_chat_async(const std::string& filename);
     void clear();
     void refresh_settings();
     bool submit_message(const std::string& text);
@@ -36,8 +39,25 @@ public:
     bool delete_current_chat();
     const std::string& current_filename() const { return filename_; }
     bool is_streaming() const { return streaming_; }
+    bool is_loading() const { return loading_; }
 
 private:
+    struct ChatLoadResult {
+        st::Chat chat;
+        std::string filename;
+        std::uint64_t generation = 0;
+        std::optional<st::ChatDraft> draft;
+        bool recovered = false;
+        std::string draft_error;
+        std::string error;
+    };
+
+    void load_chat_in_background(std::string character_key,
+                                 std::string filename,
+                                 std::uint64_t generation);
+    void on_load_dispatcher();
+    void stop_loading();
+
     void on_send();
     void on_cancel();
     void on_new_chat();
@@ -125,6 +145,14 @@ private:
     std::size_t base_messages_ = 0;
     bool draft_saved_ = false;
     std::chrono::steady_clock::time_point last_draft_save_;
+
+    Glib::Dispatcher load_dispatcher_;
+    std::thread load_worker_;
+    std::mutex load_mutex_;
+    std::optional<ChatLoadResult> pending_load_;
+    bool load_ready_ = false;
+    bool loading_ = false;
+    std::uint64_t load_generation_ = 0;
 };
 
 }  // namespace ui

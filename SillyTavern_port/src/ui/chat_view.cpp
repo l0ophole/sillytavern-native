@@ -136,6 +136,7 @@ ChatView::ChatView(st::ChatStore& chats,
     pack_start(composer_row_, false, false, 0);
 
     dispatcher_.connect(sigc::mem_fun(*this, &ChatView::on_dispatcher));
+    load_dispatcher_.connect(sigc::mem_fun(*this, &ChatView::on_load_dispatcher));
 
     update_controls();
 
@@ -144,10 +145,12 @@ ChatView::ChatView(st::ChatStore& chats,
 
 ChatView::~ChatView() {
     stop_streaming();
+    stop_loading();
 }
 
 bool ChatView::set_character(const st::CharacterEntry& entry) {
     stop_streaming();
+    stop_loading();
     card_ = entry.card;
     character_key_ = entry.id;
     character_name_ = entry.card.name.empty() ? entry.id : entry.card.name;
@@ -167,8 +170,32 @@ bool ChatView::set_character(const st::CharacterEntry& entry) {
     return session_ != nullptr;
 }
 
+bool ChatView::set_character_async(const st::CharacterEntry& entry) {
+    stop_streaming();
+    stop_loading();
+    card_ = entry.card;
+    character_key_ = entry.id;
+    character_name_ = entry.card.name.empty() ? entry.id : entry.card.name;
+    if (card_.name.empty()) {
+        card_.name = character_name_;
+    }
+    session_.reset();
+    filename_.clear();
+
+    const std::vector<std::string> files = chats_.list(character_key_);
+    if (files.empty()) {
+        const bool created = create_new_chat(true);
+        update_controls();
+        return created;
+    }
+    const bool started = load_chat_async(files.back());
+    update_controls();
+    return started;
+}
+
 void ChatView::clear() {
     stop_streaming();
+    stop_loading();
     session_.reset();
     filename_.clear();
     character_key_.clear();
@@ -189,7 +216,7 @@ void ChatView::refresh_settings() {
 }
 
 void ChatView::on_send() {
-    if (!session_ || streaming_) {
+    if (!session_ || streaming_ || loading_) {
         return;
     }
 
@@ -204,7 +231,7 @@ void ChatView::on_send() {
 }
 
 bool ChatView::submit_message(const std::string& text) {
-    if (!session_ || streaming_) {
+    if (!session_ || streaming_ || loading_) {
         return false;
     }
     if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
@@ -239,25 +266,25 @@ void ChatView::on_cancel() {
 }
 
 void ChatView::on_new_chat() {
-    if (streaming_) {
+    if (streaming_ || loading_) {
         return;
     }
     create_new_chat(true);
 }
 
 void ChatView::on_chat_selected() {
-    if (updating_selector_ || streaming_) {
+    if (updating_selector_ || streaming_ || loading_) {
         return;
     }
     const std::string selected = chat_selector_.get_active_text().raw();
     if (selected.empty() || selected == filename_) {
         return;
     }
-    load_chat(selected);
+    load_chat_async(selected);
 }
 
 void ChatView::on_rename_chat() {
-    if (!session_ || streaming_ || filename_.empty()) {
+    if (!session_ || streaming_ || loading_ || filename_.empty()) {
         return;
     }
 
@@ -287,7 +314,7 @@ void ChatView::on_rename_chat() {
 }
 
 bool ChatView::rename_current_chat(const std::string& name) {
-    if (!session_ || streaming_ || filename_.empty() || character_key_.empty()) {
+    if (!session_ || streaming_ || loading_ || filename_.empty() || character_key_.empty()) {
         return false;
     }
 
@@ -319,7 +346,7 @@ bool ChatView::rename_current_chat(const std::string& name) {
 }
 
 void ChatView::on_delete_chat() {
-    if (!session_ || streaming_ || filename_.empty()) {
+    if (!session_ || streaming_ || loading_ || filename_.empty()) {
         return;
     }
 
@@ -339,7 +366,7 @@ void ChatView::on_delete_chat() {
 }
 
 bool ChatView::delete_current_chat() {
-    if (!session_ || streaming_ || filename_.empty() || character_key_.empty()) {
+    if (!session_ || streaming_ || loading_ || filename_.empty() || character_key_.empty()) {
         return false;
     }
 
@@ -356,13 +383,15 @@ bool ChatView::delete_current_chat() {
     filename_.clear();
     const std::vector<std::string> remaining = chats_.list(character_key_);
     if (remaining.empty()) {
-        create_new_chat(false);
-    } else {
-        load_chat(remaining.back());
+        const bool created = create_new_chat(false);
+        update_controls();
+        set_status("Deleted " + removed);
+        return created;
     }
+    const bool started = load_chat_async(remaining.back());
     update_controls();
     set_status("Deleted " + removed);
-    return session_ != nullptr;
+    return started;
 }
 
 void ChatView::on_dispatcher() {
@@ -403,7 +432,7 @@ bool ChatView::on_composer_key_press(GdkEventKey* event) {
 }
 
 bool ChatView::on_transcript_button_press(GdkEventButton* event) {
-    if (event == nullptr || event->button != 3 || streaming_ || !session_) {
+    if (event == nullptr || event->button != 3 || streaming_ || loading_ || !session_) {
         return false;
     }
 
@@ -428,7 +457,7 @@ bool ChatView::on_transcript_button_press(GdkEventButton* event) {
 }
 
 void ChatView::on_edit_message() {
-    if (!session_ || streaming_ || context_index_ >= session_->chat().messages.size()) {
+    if (!session_ || streaming_ || loading_ || context_index_ >= session_->chat().messages.size()) {
         return;
     }
 
@@ -472,7 +501,7 @@ void ChatView::on_edit_message() {
 }
 
 void ChatView::on_delete_message() {
-    if (!session_ || streaming_ || context_index_ >= session_->chat().messages.size()) {
+    if (!session_ || streaming_ || loading_ || context_index_ >= session_->chat().messages.size()) {
         return;
     }
 
@@ -508,7 +537,7 @@ void ChatView::on_delete_message() {
 }
 
 void ChatView::on_regenerate() {
-    if (!session_ || streaming_) {
+    if (!session_ || streaming_ || loading_) {
         return;
     }
 
@@ -527,7 +556,7 @@ void ChatView::on_regenerate() {
 }
 
 void ChatView::on_continue() {
-    if (!session_ || streaming_) {
+    if (!session_ || streaming_ || loading_) {
         return;
     }
     if (!session_->can_continue()) {
@@ -800,6 +829,168 @@ bool ChatView::load_chat(const std::string& filename) {
     }
 }
 
+bool ChatView::load_chat_async(const std::string& filename) {
+    if (character_key_.empty()) {
+        return false;
+    }
+    stop_streaming();
+    stop_loading();
+
+    session_.reset();
+    filename_.clear();
+    refresh_selector();
+    refresh_transcript();
+    loading_ = true;
+
+    const std::string character_key = character_key_;
+    const std::uint64_t generation = ++load_generation_;
+    try {
+        load_worker_ = std::thread([this, character_key, filename, generation]() {
+            load_chat_in_background(character_key, filename, generation);
+        });
+        update_controls();
+        return true;
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("chat load start failed: ") + error.what());
+        loading_ = false;
+        update_controls();
+        set_status(std::string("Chat error: ") + error.what());
+        return false;
+    }
+}
+
+void ChatView::load_chat_in_background(std::string character_key,
+                                       std::string filename,
+                                       std::uint64_t generation) {
+    ChatLoadResult result;
+    result.filename = filename;
+    result.generation = generation;
+    try {
+        result.chat = chats_.load(character_key, filename);
+    } catch (const std::exception& error) {
+        result.error = error.what();
+    }
+
+    if (result.error.empty()) {
+        try {
+            result.draft = chats_.load_draft(character_key, filename);
+        } catch (const std::exception& error) {
+            result.draft_error = error.what();
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(load_mutex_);
+        pending_load_ = std::move(result);
+        load_ready_ = true;
+    }
+    load_dispatcher_.emit();
+}
+
+void ChatView::on_load_dispatcher() {
+    ChatLoadResult result;
+    {
+        std::lock_guard<std::mutex> lock(load_mutex_);
+        if (!load_ready_ || !pending_load_.has_value()) {
+            return;
+        }
+        result = std::move(*pending_load_);
+        pending_load_.reset();
+        load_ready_ = false;
+    }
+
+    if (load_worker_.joinable()) {
+        load_worker_.join();
+    }
+
+    if (result.generation != load_generation_) {
+        return;
+    }
+
+    const auto discard_draft = [this](const std::string& name) {
+        try {
+            chats_.clear_draft(character_key_, name);
+        } catch (const std::exception& error) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("chat draft clear failed: ") + error.what());
+        }
+    };
+
+    if (!result.error.empty()) {
+        st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + result.error);
+        if (!result.draft_error.empty()) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("chat draft load failed: ") + result.draft_error);
+            discard_draft(result.filename);
+        }
+        session_.reset();
+        filename_.clear();
+        refresh_selector();
+        refresh_transcript();
+        loading_ = false;
+        update_controls();
+        set_status(std::string("Chat error: ") + result.error);
+        return;
+    }
+
+    try {
+        filename_ = result.filename;
+        session_ = std::make_unique<st::ChatSession>(
+            card_, settings_, chats_, character_key_, filename_, std::move(result.chat));
+
+        if (!result.draft_error.empty()) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("chat draft load failed: ") + result.draft_error);
+            discard_draft(filename_);
+        }
+        if (result.draft.has_value()) {
+            if (session_->recover_draft(*result.draft)) {
+                result.recovered = true;
+                try {
+                    session_->save();
+                } catch (const std::exception& error) {
+                    st::log_write(st::LogLevel::Error,
+                                  std::string("chat draft recovery save failed: ") +
+                                      error.what());
+                }
+            } else {
+                st::log_write(st::LogLevel::Warn,
+                              "discarding stale chat draft: " + filename_);
+                discard_draft(filename_);
+            }
+        }
+
+        refresh_selector();
+        refresh_transcript();
+        loading_ = false;
+        update_controls();
+        set_status(result.recovered ? "Recovered unsaved chat" : "Loaded " + filename_);
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat load failed: ") + error.what());
+        session_.reset();
+        filename_.clear();
+        refresh_selector();
+        refresh_transcript();
+        loading_ = false;
+        update_controls();
+        set_status(std::string("Chat error: ") + error.what());
+    }
+}
+
+void ChatView::stop_loading() {
+    ++load_generation_;
+    if (load_worker_.joinable()) {
+        load_worker_.join();
+    }
+    {
+        std::lock_guard<std::mutex> lock(load_mutex_);
+        pending_load_.reset();
+        load_ready_ = false;
+    }
+    loading_ = false;
+}
+
 std::string ChatView::new_chat_filename() const {
     const auto now = std::chrono::system_clock::now();
     const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
@@ -874,12 +1065,13 @@ void ChatView::update_budget_label() {
 void ChatView::update_controls() {
     const bool has_character = !character_key_.empty();
     const bool has_session = session_ != nullptr;
-    send_button_.set_sensitive(has_session && !streaming_);
+    const bool busy = streaming_ || loading_;
+    send_button_.set_sensitive(has_session && !busy);
     cancel_button_.set_sensitive(streaming_);
-    chat_selector_.set_sensitive(has_character && !streaming_);
-    new_button_.set_sensitive(has_character && !streaming_);
-    rename_button_.set_sensitive(has_session && !streaming_ && !filename_.empty());
-    delete_button_.set_sensitive(has_session && !streaming_ && !filename_.empty());
+    chat_selector_.set_sensitive(has_character && !busy);
+    new_button_.set_sensitive(has_character && !busy);
+    rename_button_.set_sensitive(has_session && !busy && !filename_.empty());
+    delete_button_.set_sensitive(has_session && !busy && !filename_.empty());
 }
 
 void ChatView::append_streaming_display() {
