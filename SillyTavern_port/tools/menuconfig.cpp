@@ -185,7 +185,7 @@ std::string trim(std::string value) {
 std::set<std::string> compute_defaults(const Registry& registry) {
     std::set<std::string> enabled;
     for (const auto& feature : registry.features) {
-        if (feature.critical && feature.status == "ported") {
+        if (feature.status == "ported") {
             enabled.insert(feature.id);
         }
     }
@@ -356,7 +356,6 @@ int run_selftest(const std::optional<std::string>& explicit_registry) {
         const bool enabled = real_defaults.find(feature.id) != real_defaults.end();
         if (enabled) {
             check(feature.status == "ported", "enabled feature must be ported: " + feature.id);
-            check(feature.critical, "enabled feature must be critical: " + feature.id);
         }
         if (feature.status == "planned") {
             check(!enabled, "planned feature must be disabled: " + feature.id);
@@ -367,10 +366,13 @@ int run_selftest(const std::optional<std::string>& explicit_registry) {
     fixture.features.push_back(make_feature("P01", "platform", true, "ported"));
     fixture.features.push_back(make_feature("C04", "chat", true, "planned", {"P01"}));
     fixture.features.push_back(make_feature("X01", "ui", false, "planned"));
+    fixture.features.push_back(make_feature("X02", "ui", false, "ported"));
     fixture.rebuild_index();
     fixture.validate();
     const std::set<std::string> fixture_defaults = compute_defaults(fixture);
     check(fixture_defaults.count("P01") == 1, "fixture defaults should enable ported critical P01");
+    check(fixture_defaults.count("X02") == 1,
+          "fixture defaults should enable ported non-critical X02");
     check(fixture_defaults.count("C04") == 0, "fixture defaults should not enable planned C04");
     check(fixture_defaults.count("X01") == 0, "fixture defaults should not enable planned X01");
 

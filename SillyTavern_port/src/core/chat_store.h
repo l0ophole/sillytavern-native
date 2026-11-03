@@ -13,6 +13,8 @@ public:
     explicit ChatStore(std::filesystem::path chats_root);
 
     std::filesystem::path chat_dir(const std::string& character) const;
+    std::filesystem::path lock_path(const std::string& character,
+                                    const std::string& filename) const;
     std::vector<std::string> list(const std::string& character) const;
     Chat load(const std::string& character, const std::string& filename) const;
     void save(const std::string& character,

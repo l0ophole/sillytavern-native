@@ -11,6 +11,7 @@ struct Paths {
     std::filesystem::path chats_dir;
     std::filesystem::path logs_dir;
     std::filesystem::path settings_file;
+    std::filesystem::path instance_lock_file;
 
     static Paths resolve();
     static Paths resolve(const std::filesystem::path& config_home,

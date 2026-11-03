@@ -1,6 +1,7 @@
 #include "core/chat_store.h"
 
 #include "core/atomic_file.h"
+#include "core/file_lock.h"
 #include "core/names.h"
 
 #include <algorithm>
@@ -89,6 +90,12 @@ fs::path ChatStore::chat_dir(const std::string& character) const {
     return safe_join(chats_root_, sanitize_filename(character, "character"));
 }
 
+fs::path ChatStore::lock_path(const std::string& character,
+                              const std::string& filename) const {
+    validate_chat_filename(filename);
+    return safe_join(chat_dir(character), ".locks") / (filename + ".lock");
+}
+
 std::vector<std::string> ChatStore::list(const std::string& character) const {
     std::vector<std::string> names;
     std::error_code error;
@@ -160,6 +167,10 @@ void ChatStore::save(const std::string& character,
                      const std::string& filename,
                      const Chat& chat) const {
     validate_chat_filename(filename);
+    const auto lock = FileLock::try_acquire(lock_path(character, filename));
+    if (!lock.has_value()) {
+        throw std::runtime_error("chat is locked: " + filename);
+    }
 
     Json metadata = chat.metadata.extra.is_object() ? chat.metadata.extra : Json::object();
     metadata["user_name"] = chat.metadata.user_name;
@@ -207,6 +218,10 @@ void ChatStore::rename(const std::string& character,
                        const std::string& to) const {
     validate_chat_filename(from);
     validate_chat_filename(to);
+    const auto lock = FileLock::try_acquire(lock_path(character, from));
+    if (!lock.has_value()) {
+        throw std::runtime_error("chat is locked: " + from);
+    }
     const fs::path directory = chat_dir(character);
     const fs::path from_path = safe_join(directory, from);
     const fs::path to_path = safe_join(directory, to);
@@ -227,6 +242,10 @@ void ChatStore::rename(const std::string& character,
 
 void ChatStore::remove(const std::string& character, const std::string& filename) const {
     validate_chat_filename(filename);
+    const auto lock = FileLock::try_acquire(lock_path(character, filename));
+    if (!lock.has_value()) {
+        throw std::runtime_error("chat is locked: " + filename);
+    }
     std::error_code error;
     fs::remove(safe_join(chat_dir(character), filename), error);
     if (error) {

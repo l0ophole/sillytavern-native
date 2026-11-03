@@ -11,6 +11,13 @@ TEST(paths_resolve_explicit) {
     CHECK_EQ(p.chats_dir, p.data_dir / "chats");
     CHECK_EQ(p.logs_dir, p.data_dir / "logs");
     CHECK_EQ(p.settings_file, p.config_dir / "settings.json");
+    CHECK_EQ(p.instance_lock_file, p.data_dir / "instance.lock");
+}
+
+TEST(paths_include_instance_lock) {
+    const auto p = st::Paths::resolve("/cfg", "/data");
+    CHECK_EQ(p.instance_lock_file,
+             std::filesystem::path("/data/sillytavern-port/instance.lock"));
 }
 
 TEST(paths_ensure_creates_directories) {

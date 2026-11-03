@@ -33,6 +33,7 @@ Paths Paths::resolve(const fs::path& config_home, const fs::path& data_home) {
     paths.chats_dir = paths.data_dir / "chats";
     paths.logs_dir = paths.data_dir / "logs";
     paths.settings_file = paths.config_dir / "settings.json";
+    paths.instance_lock_file = paths.data_dir / "instance.lock";
     return paths;
 }
 

@@ -2,12 +2,14 @@
 
 #include "core/character_store.h"
 #include "core/chat_store.h"
+#include "core/file_lock.h"
 #include "core/paths.h"
 #include "core/settings.h"
 
 #include <gtkmm.h>
 
 #include <memory>
+#include <optional>
 
 namespace st {
 namespace ui {
@@ -25,6 +27,7 @@ protected:
 
 private:
     st::Paths paths_;
+    std::optional<st::FileLock> instance_lock_;
     st::Settings settings_;
     std::unique_ptr<st::CharacterStore> characters_;
     std::unique_ptr<st::ChatStore> chats_;

@@ -21,18 +21,17 @@ with open("features/features.json", encoding="utf-8") as handle:
 features = registry["features"]
 ported = [feature for feature in features if feature["status"] == "ported"]
 planned = [feature for feature in features if feature["status"] == "planned"]
+v011 = [feature for feature in features if feature["target"] == "0.1.1"]
 
 errors = []
 if len(features) != 105:
     errors.append(f"expected 105 features, found {len(features)}")
-if len(ported) != 19:
-    errors.append(f"expected 19 ported features, found {len(ported)}")
-if len(planned) != 86:
-    errors.append(f"expected 86 planned features, found {len(planned)}")
-
-non_critical = [feature["id"] for feature in ported if not feature.get("critical", False)]
-if non_critical:
-    errors.append("ported non-critical features: " + ", ".join(non_critical))
+if len(ported) != 20:
+    errors.append(f"expected 20 ported features, found {len(ported)}")
+if len(planned) != 85:
+    errors.append(f"expected 85 planned features, found {len(planned)}")
+if len(v011) != 2:
+    errors.append(f"expected 2 v0.1.1 target features, found {len(v011)}")
 
 with open(".config", encoding="utf-8") as handle:
     config_lines = {line.strip() for line in handle if line.strip() and not line.startswith("#")}
@@ -58,7 +57,8 @@ if errors:
         print("verify: " + error, file=sys.stderr)
     sys.exit(1)
 
-print(f"verify: {len(features)} features, {len(ported)} ported, {len(planned)} planned")
+print(f"verify: {len(features)} features, {len(ported)} ported, {len(planned)} planned, "
+      f"{len(v011)} v0.1.1")
 PY
 
 if grep -rIn 'gtk\|gtkmm' src/core; then
@@ -71,4 +71,4 @@ if [ -d ../SillyTavern/.git ] && [ -n "$(git -C ../SillyTavern status --porcelai
     exit 1
 fi
 
-echo "v0.1 verification: PASS"
+echo "v0.1.1 verification: PASS"

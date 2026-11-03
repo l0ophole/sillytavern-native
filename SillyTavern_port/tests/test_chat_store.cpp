@@ -3,6 +3,7 @@
 
 #include "core/atomic_file.h"
 #include "core/chat_store.h"
+#include "core/file_lock.h"
 
 #include <filesystem>
 #include <string>
@@ -188,6 +189,71 @@ TEST(chat_list_ignores_non_jsonl) {
     const auto names = store.list("Seraphina");
     CHECK_EQ(names.size(), std::size_t(1));
     CHECK_EQ(names[0], "chat.jsonl");
+}
+
+TEST(chat_save_refuses_when_locked) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto chat = store.create("Seraphina", "User", "Hi");
+    auto lock = st::FileLock::try_acquire(store.lock_path("Seraphina", "chat.jsonl"));
+    CHECK(lock.has_value());
+    bool threw = false;
+    try {
+        store.save("Seraphina", "chat.jsonl", chat);
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        CHECK(std::string(error.what()).find("locked") != std::string::npos);
+    }
+    CHECK(threw);
+    lock.reset();
+    store.save("Seraphina", "chat.jsonl", chat);
+    CHECK_EQ(store.list("Seraphina").size(), std::size_t(1));
+}
+
+TEST(chat_rename_and_remove_refuse_when_locked) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const auto chat = store.create("Seraphina", "User", "Hi");
+    store.save("Seraphina", "a.jsonl", chat);
+    auto lock = st::FileLock::try_acquire(store.lock_path("Seraphina", "a.jsonl"));
+    CHECK(lock.has_value());
+
+    bool rename_threw = false;
+    try {
+        store.rename("Seraphina", "a.jsonl", "b.jsonl");
+    } catch (const std::runtime_error& error) {
+        rename_threw = true;
+        CHECK(std::string(error.what()).find("locked") != std::string::npos);
+    }
+    CHECK(rename_threw);
+
+    bool remove_threw = false;
+    try {
+        store.remove("Seraphina", "a.jsonl");
+    } catch (const std::runtime_error& error) {
+        remove_threw = true;
+        CHECK(std::string(error.what()).find("locked") != std::string::npos);
+    }
+    CHECK(remove_threw);
+
+    CHECK_EQ(store.list("Seraphina").size(), std::size_t(1));
+    lock.reset();
+    store.rename("Seraphina", "a.jsonl", "b.jsonl");
+    const auto renamed = store.list("Seraphina");
+    CHECK_EQ(renamed.size(), std::size_t(1));
+    CHECK_EQ(renamed[0], "b.jsonl");
+}
+
+TEST(chat_lock_path_rejects_unsafe_filename) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    bool threw = false;
+    try {
+        (void)store.lock_path("Seraphina", "../escape.jsonl");
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
 }
 
 TEST(chat_rename_refuses_to_overwrite) {

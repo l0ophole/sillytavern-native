@@ -33,10 +33,11 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C39 Basic sampling controls | 04-stage-3-prompting-generation.md | yes | yes | 0b897b5 | Temperature/top_p/max_tokens/stream clamps, settings mapping, request JSON |
 | C04 OpenAI-compatible streaming client | 04-stage-3-prompting-generation.md | yes | yes | f6fcff8 | SSE delta streaming, mid-stream provider error detection (`ee06e5b`), non-streaming fallback, cancellation, mock-server integration tests |
 | P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | afd7c8b | GTK3 window, paned layout, header/settings dialog, startup error handling, status bar, Xvfb smoke harness |
+| P09 Single-instance and data locking | 08-v0.1.1-reliability.md | yes | yes | pending | Advisory `flock` instance lock with holder PID plus per-chat write locks; second writer fails cleanly |
 
 ## v0.1 completion
 
-All 19 critical v0.1 features are ported and tested. The remaining 86 features
+All 19 critical v0.1 features are ported and tested. The remaining 85 features
 stay visible but dim and unselectable in `make menuconfig`. Host verification
 and the Alpine (musl) container gate both pass, including the Xvfb smoke test
 and live mock-server streaming.

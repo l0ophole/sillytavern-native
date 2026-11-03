@@ -4,6 +4,7 @@
 #include "ui/main_window.h"
 
 #include <exception>
+#include <stdexcept>
 #include <string>
 
 namespace st {
@@ -26,6 +27,15 @@ void Application::on_activate() {
         if (!window_) {
             paths_ = st::Paths::resolve();
             paths_.ensure();
+            instance_lock_ = st::FileLock::try_acquire(paths_.instance_lock_file);
+            if (!instance_lock_.has_value()) {
+                std::string message = "another instance is already running";
+                if (const auto holder = st::FileLock::holder_pid(paths_.instance_lock_file);
+                    holder.has_value()) {
+                    message += " (pid " + std::to_string(*holder) + ")";
+                }
+                throw std::runtime_error(message);
+            }
             st::log_init(paths_.logs_dir / "app.log", false);
             settings_ = st::Settings::load(paths_.settings_file);
             st::log_set_redactions({settings_.api_key});
