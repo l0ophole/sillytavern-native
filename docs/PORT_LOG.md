@@ -33,12 +33,12 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C39 Basic sampling controls | 04-stage-3-prompting-generation.md | yes | yes | 0b897b5 | Temperature/top_p/max_tokens/stream clamps, settings mapping, request JSON |
 | C04 OpenAI-compatible streaming client | 04-stage-3-prompting-generation.md | yes | yes | f6fcff8 | SSE delta streaming, mid-stream provider error detection (`ee06e5b`), non-streaming fallback, cancellation, mock-server integration tests |
 | P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | afd7c8b | GTK3 window, paned layout, header/settings dialog, startup error handling, status bar, Xvfb smoke harness |
-| P09 Single-instance and data locking | 08-v0.1.1-reliability.md | yes | yes | pending | Advisory `flock` instance lock with holder PID plus per-chat write locks; second writer fails cleanly |
-| P10 Crash recovery and autosave journal | 08-v0.1.1-reliability.md | yes | yes | pending | Atomic per-chunk draft journal under `.journal`, base-message staleness check, recovery on chat load |
+| P09 Single-instance and data locking | 08-v0.1.1-reliability.md | yes | yes | 45f8801 | Advisory `flock` instance lock with holder PID plus per-chat write locks; second writer fails cleanly |
+| P10 Crash recovery and autosave journal | 08-v0.1.1-reliability.md | yes | yes | 730bd8a | Atomic per-chunk draft journal under `.journal`, base-message staleness check, recovery on chat load |
 
 ## v0.1 completion
 
-All 19 critical v0.1 features are ported and tested. The remaining 85 features
+All 19 critical v0.1 features are ported and tested. The remaining 84 features
 stay visible but dim and unselectable in `make menuconfig`. Host verification
 and the Alpine (musl) container gate both pass, including the Xvfb smoke test
 and live mock-server streaming.
@@ -47,9 +47,35 @@ Post-review minor fixes: card-file size caps are enforced before reading a
 manually placed card, and deleting the last search-filtered character clears
 the stale chat view instead of leaving the deleted character selected.
 
-## Known v0.1 limitations
+## v0.1.1 completion
 
-- Local character card and chat JSONL file I/O runs synchronously on the GTK main thread. Because v0.1 targets single-user local storage and enforces strict file-size caps (1 MiB for `settings.json`, 64 MiB for character cards and chat files), synchronous I/O avoids cross-thread session races in v0.1; background file I/O workers are deferred to post-v0.1.
+v0.1.1 is a reliability release; it adds no v0.2 chat features.
+
+- P09 (`45f8801`): single-instance `instance.lock` with the holder PID, plus
+  per-chat advisory `flock` write locks so a second writer fails cleanly.
+- P10 (`730bd8a`): atomic crash-recovery drafts under `chats/.journal`,
+  staleness-checked against the on-disk chat and replayed on chat load.
+- Character-library scans and chat loads run on background workers
+  (`75561cb`, `a8ee9d2`, `0c2d938`).
+- HTTP response bodies are bounded, SSE framing accepts CR/LF/CRLF, and a
+  single SSE event is capped at 16 MiB (`bf69325`, `de26a31`).
+- Parser property tests and the `make test-sanitize` ASan/UBSan target
+  (`5f05955`).
+- Both gates pass: `tests/verify_v01.sh` runs sanitizer tests, a clean normal
+  build, 154 unit tests, integration tests, 12 smoke markers, the menuconfig
+  selftest, the 105/21/84/2 feature counts with the P09/P10 membership check,
+  the `0.1.1` version string, the GTK-free core, and a clean upstream tree.
+  `tests/alpine_build.sh` repeats build, unit, integration, and smoke checks on
+  Alpine 3.20 (musl).
+
+## Known v0.1.1 limitations
+
+- Startup character-library scans and chat loads run on background workers.
+  Explicit import/delete and new-chat writes remain synchronous on the GTK
+  thread and are size-capped: 1 MiB for `settings.json`, 64 MiB for character
+  cards and chat JSONL, and 16 MiB for compact drafts. Streaming draft writes
+  are atomic and throttled to one per second, with each write fsynced on the
+  GTK thread.
 
 ## Stages
 
@@ -60,4 +86,4 @@ the stale chat view instead of leaving the deleted character selected.
 | 2 Data compatibility | yes | yes | `make test` 65 tests; PNG ccv3 precedence, path containment, JSONL round-trip; D02 UI completed in stage 4 |
 | 3 Prompting/generation | yes | yes | `make test` 101 tests, `tests/integration_openai.sh` 101 tests; prompt order/macros, budget trimming, sampling clamps, SSE streaming/errors/cancellation |
 | 4 GTK UI | yes | yes | `make test` 127 tests, `make smoke` (8 markers: window, avatar, chat round-trip, message actions, chat lifecycle, character delete, live UI streaming, partial on switch), `tests/integration_openai.sh` 127 tests, menuconfig selftest; no warnings; `src/core/` GTK-free |
-| 5 Verification | yes | yes | `tests/verify_v01.sh`: clean build, 127 tests, 8 smoke markers, integration tests, menuconfig selftest, 105/19/86 counts + all `CONFIG_*`/`ST_FEATURE_*` flags verified, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 127 unit + integration tests, 8 smoke markers including live UI streaming and partial-on-switch |
+| 5 Verification | yes | yes | `tests/verify_v01.sh`: sanitizer tests, clean build, 154 unit tests, integration tests, 12 smoke markers, menuconfig selftest, 105/21/84/2 counts with P09/P10 membership + all `CONFIG_*`/`ST_FEATURE_*` flags verified, `0.1.1` version string, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 154 unit + integration tests, 12 smoke markers |

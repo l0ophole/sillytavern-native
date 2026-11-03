@@ -21,6 +21,11 @@ docker run --rm \
         cd /work
         rm -rf build .config
         make -j"$(nproc)"
+        version="$(./build/sillytavern-port --version)"
+        if [ "$version" != "SillyTavern Port 0.1.1" ]; then
+            echo "alpine: expected version SillyTavern Port 0.1.1, found $version" >&2
+            exit 1
+        fi
         echo "alpine: build ok"
         make -j"$(nproc)" test
         echo "alpine: tests ok"

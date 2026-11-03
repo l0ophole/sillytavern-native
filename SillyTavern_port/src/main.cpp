@@ -5,7 +5,7 @@
 #include <string>
 
 int main(int argc, char** argv) {
-    const std::string version = "SillyTavern Port 0.1.0";
+    const std::string version = "SillyTavern Port 0.1.1";
     if (argc > 1 && std::string(argv[1]) == "--version") {
         std::cout << version << '\n';
         return 0;
