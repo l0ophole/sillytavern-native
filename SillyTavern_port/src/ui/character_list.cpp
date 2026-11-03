@@ -13,7 +13,7 @@ namespace ui {
 CharacterList::CharacterList(Gtk::Window& parent,
                              st::CharacterStore& store,
                              std::function<void(const CharacterEntry&)> on_selected,
-                             std::function<void()> on_changed)
+                             std::function<void(const CharacterEntry*)> on_changed)
     : Gtk::Box(Gtk::ORIENTATION_VERTICAL),
       parent_(parent),
       store_(store),
@@ -73,6 +73,10 @@ void CharacterList::select_id(const std::string& id) {
         }
     }
     select_first();
+}
+
+void CharacterList::set_search_text(const std::string& text) {
+    search_.set_text(text);
 }
 
 void CharacterList::apply_filter() {
@@ -143,7 +147,7 @@ void CharacterList::on_import_clicked() {
         refresh();
         select_id(imported.id);
         if (on_changed_) {
-            on_changed_();
+            on_changed_(selected_entry());
         }
     } catch (const std::exception& error) {
         st::log_write(st::LogLevel::Error, std::string("character import failed: ") + error.what());
@@ -197,7 +201,7 @@ bool CharacterList::delete_selected() {
             select_first();
         }
         if (on_changed_) {
-            on_changed_();
+            on_changed_(selected_entry());
         }
         return true;
     } catch (const std::exception& error) {
@@ -224,6 +228,18 @@ void CharacterList::on_row_selected(Gtk::ListBoxRow* row) {
     if (on_selected_) {
         on_selected_(visible_[static_cast<std::size_t>(index)]);
     }
+}
+
+const CharacterEntry* CharacterList::selected_entry() const {
+    const Gtk::ListBoxRow* row = list_.get_selected_row();
+    if (row == nullptr) {
+        return nullptr;
+    }
+    const int index = row->get_index();
+    if (index < 0 || static_cast<std::size_t>(index) >= visible_.size()) {
+        return nullptr;
+    }
+    return &visible_[static_cast<std::size_t>(index)];
 }
 
 }  // namespace ui

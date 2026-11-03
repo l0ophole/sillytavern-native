@@ -15,11 +15,12 @@ public:
     CharacterList(Gtk::Window& parent,
                   st::CharacterStore& store,
                   std::function<void(const CharacterEntry&)> on_selected,
-                  std::function<void()> on_changed = {});
+                  std::function<void(const CharacterEntry*)> on_changed = {});
 
     void refresh();
     void select_first();
     void select_id(const std::string& id);
+    void set_search_text(const std::string& text);
     bool delete_selected();
     bool empty() const { return all_.empty(); }
 
@@ -31,11 +32,12 @@ private:
     void on_import_clicked();
     void on_delete_clicked();
     void on_row_selected(Gtk::ListBoxRow* row);
+    const CharacterEntry* selected_entry() const;
 
     Gtk::Window& parent_;
     st::CharacterStore& store_;
     std::function<void(const CharacterEntry&)> on_selected_;
-    std::function<void()> on_changed_;
+    std::function<void(const CharacterEntry*)> on_changed_;
 
     std::vector<CharacterEntry> all_;
     std::vector<CharacterEntry> visible_;

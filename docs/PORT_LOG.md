@@ -41,6 +41,10 @@ stay visible but dim and unselectable in `make menuconfig`. Host verification
 and the Alpine (musl) container gate both pass, including the Xvfb smoke test
 and live mock-server streaming.
 
+Post-review minor fixes: card-file size caps are enforced before reading a
+manually placed card, and deleting the last search-filtered character clears
+the stale chat view instead of leaving the deleted character selected.
+
 ## Known v0.1 limitations
 
 - Local character card and chat JSONL file I/O runs synchronously on the GTK main thread. Because v0.1 targets single-user local storage and enforces strict file-size caps (1 MiB for `settings.json`, 64 MiB for character cards and chat files), synchronous I/O avoids cross-thread session races in v0.1; background file I/O workers are deferred to post-v0.1.
@@ -53,5 +57,5 @@ and live mock-server streaming.
 | 1 Core platform | yes | yes | `make test` 28 tests, menuconfig selftest, mock SSE server streaming |
 | 2 Data compatibility | yes | yes | `make test` 65 tests; PNG ccv3 precedence, path containment, JSONL round-trip; D02 UI completed in stage 4 |
 | 3 Prompting/generation | yes | yes | `make test` 101 tests, `tests/integration_openai.sh` 101 tests; prompt order/macros, budget trimming, sampling clamps, SSE streaming/errors/cancellation |
-| 4 GTK UI | yes | yes | `make test` 126 tests, `make smoke` (8 markers: window, avatar, chat round-trip, message actions, chat lifecycle, character delete, live UI streaming, partial on switch), `tests/integration_openai.sh` 126 tests, menuconfig selftest; no warnings; `src/core/` GTK-free |
-| 5 Verification | yes | yes | `tests/verify_v01.sh`: clean build, 126 tests, 8 smoke markers, integration tests, menuconfig selftest, 105/19/86 counts + all `CONFIG_*`/`ST_FEATURE_*` flags verified, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 126 unit + integration tests, 8 smoke markers including live UI streaming and partial-on-switch |
+| 4 GTK UI | yes | yes | `make test` 127 tests, `make smoke` (8 markers: window, avatar, chat round-trip, message actions, chat lifecycle, character delete, live UI streaming, partial on switch), `tests/integration_openai.sh` 127 tests, menuconfig selftest; no warnings; `src/core/` GTK-free |
+| 5 Verification | yes | yes | `tests/verify_v01.sh`: clean build, 127 tests, 8 smoke markers, integration tests, menuconfig selftest, 105/19/86 counts + all `CONFIG_*`/`ST_FEATURE_*` flags verified, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 127 unit + integration tests, 8 smoke markers including live UI streaming and partial-on-switch |

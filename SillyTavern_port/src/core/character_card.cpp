@@ -168,7 +168,8 @@ CharacterCard parse_character_card(const std::string& bytes, const std::string& 
 }
 
 CharacterCard parse_character_card_file(const std::filesystem::path& path) {
-    return parse_character_card(read_file(path), path.string());
+    const std::string bytes = read_file_limited(path, kMaxCardBytes, path.string());
+    return parse_character_card(bytes, path.string());
 }
 
 Json card_to_json(const CharacterCard& card) {

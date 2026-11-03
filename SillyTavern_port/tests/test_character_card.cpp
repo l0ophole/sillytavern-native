@@ -1,9 +1,12 @@
 #include "test_util.h"
 #include "png_fixture.h"
+#include "temp_dir.h"
 
+#include "core/atomic_file.h"
 #include "core/base64.h"
 #include "core/character_card.h"
 
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 
@@ -139,4 +142,20 @@ TEST(card_json_roundtrip) {
     CHECK_EQ(restored.alternate_greetings.size(), std::size_t(2));
     CHECK_EQ(restored.tags.size(), std::size_t(1));
     CHECK_EQ(restored.extra["future"].get<bool>(), true);
+}
+
+TEST(card_file_rejects_oversized_card_before_reading) {
+    TempDir temp;
+    const auto path = temp.path() / "huge.png";
+    st::write_file_atomic(path, "");
+    std::filesystem::resize_file(path, 64u * 1024u * 1024u + 1u);
+
+    bool threw = false;
+    try {
+        (void)st::parse_character_card_file(path);
+    } catch (const std::runtime_error& error) {
+        threw = true;
+        CHECK(std::string(error.what()).find("too large") != std::string::npos);
+    }
+    CHECK(threw);
 }

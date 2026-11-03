@@ -31,8 +31,8 @@ MainWindow::MainWindow(st::Paths paths,
         [this](const CharacterEntry& entry) {
             on_character_selected(entry);
         },
-        [this]() {
-            if (character_list_->empty()) {
+        [this](const CharacterEntry* entry) {
+            if (entry == nullptr) {
                 chat_view_->clear();
             }
         });

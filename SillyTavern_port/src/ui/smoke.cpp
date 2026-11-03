@@ -96,12 +96,12 @@ std::uint32_t adler32(const std::string& data) {
     return (second << 16) | first;
 }
 
-std::string make_smoke_png() {
+std::string make_smoke_png(const std::string& name = "Smoke Test") {
     st::Json card = st::Json::object();
     card["spec"] = "chara_card_v2";
     card["spec_version"] = "2.0";
     st::Json data = st::Json::object();
-    data["name"] = "Smoke Test";
+    data["name"] = name;
     data["description"] = "Synthetic character card for the GTK smoke test.";
     data["first_mes"] = "Hello there.";
     card["data"] = std::move(data);
@@ -288,12 +288,47 @@ int run_smoke_test() {
                 window,
                 characters,
                 [](const st::CharacterEntry&) {},
-                [&list_changed]() { list_changed = true; });
+                [&list_changed](const st::CharacterEntry*) { list_changed = true; });
             list_widget.refresh();
             list_widget.select_id(second.id);
             if (!list_widget.delete_selected() || !list_changed ||
                 characters.list().size() != std::size_t(1)) {
                 std::cerr << "smoke: character delete failed\n";
+                return 1;
+            }
+
+            const std::filesystem::path hidden_source = root.path() / "hidden-card.png";
+            st::write_file_atomic(hidden_source, make_smoke_png("Hidden Bot"));
+            const st::CharacterEntry hidden = characters.import_file(hidden_source);
+
+            ChatView filtered_view(chats, settings, [](const std::string&) {});
+            filtered_view.show_all();
+            if (!filtered_view.set_character(hidden)) {
+                std::cerr << "smoke: filtered view set_character failed\n";
+                return 1;
+            }
+
+            bool filtered_changed = false;
+            bool filtered_has_selection = true;
+            CharacterList filtered_list(
+                window,
+                characters,
+                [](const st::CharacterEntry&) {},
+                [&filtered_changed, &filtered_has_selection, &filtered_view](
+                    const st::CharacterEntry* selected) {
+                    filtered_changed = true;
+                    filtered_has_selection = selected != nullptr;
+                    if (selected == nullptr) {
+                        filtered_view.clear();
+                    }
+                });
+            filtered_list.refresh();
+            filtered_list.set_search_text("Hidden Bot");
+            filtered_list.select_id(hidden.id);
+            if (!filtered_list.delete_selected() || !filtered_changed ||
+                filtered_has_selection || filtered_list.empty() ||
+                !filtered_view.current_filename().empty()) {
+                std::cerr << "smoke: filtered character delete failed\n";
                 return 1;
             }
             std::cout << "smoke: character delete\n";
