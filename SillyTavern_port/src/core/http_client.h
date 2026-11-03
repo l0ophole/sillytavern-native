@@ -15,6 +15,9 @@ struct HttpRequest {
     long timeout_seconds = 300;
     long connect_timeout_seconds = 15;
     bool follow_redirects = true;
+    bool buffer_response_body = true;
+    std::size_t max_response_bytes = 16u * 1024u * 1024u;
+    std::size_t diagnostic_body_bytes = 1024u * 1024u;
 };
 
 struct HttpResponse {

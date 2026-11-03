@@ -26,6 +26,7 @@ private:
     std::string event_name_;
     std::string data_;
     bool has_data_ = false;
+    bool pending_cr_ = false;
 };
 
 }  // namespace st

@@ -17,13 +17,29 @@ void ensure_curl_initialized() {
 
 struct WriteContext {
     HttpResponse* response = nullptr;
+    const HttpRequest* request = nullptr;
     const HttpDataCallback* on_data = nullptr;
 };
 
 std::size_t write_callback(char* data, std::size_t size, std::size_t count, void* userdata) {
     const std::size_t total = size * count;
     auto* context = static_cast<WriteContext*>(userdata);
-    context->response->body.append(data, total);
+    const HttpRequest& request = *context->request;
+    HttpResponse& response = *context->response;
+
+    if (request.buffer_response_body) {
+        const std::size_t buffered = response.body.size();
+        if (buffered > request.max_response_bytes ||
+            total > request.max_response_bytes - buffered) {
+            response.error = "response body exceeds limit";
+            return 0;
+        }
+        response.body.append(data, total);
+    } else if (response.body.size() < request.diagnostic_body_bytes) {
+        const std::size_t remaining = request.diagnostic_body_bytes - response.body.size();
+        response.body.append(data, total < remaining ? total : remaining);
+    }
+
     if (context->on_data != nullptr && *context->on_data) {
         if (!(*context->on_data)(data, total)) {
             return 0;
@@ -77,7 +93,7 @@ HttpResponse HttpClient::post(const HttpRequest& request, const HttpDataCallback
     }
     header_list = curl_slist_append(header_list, "Expect:");
 
-    WriteContext write_context{&response, &on_data};
+    WriteContext write_context{&response, &request, &on_data};
     ProgressContext progress_context{&cancelled_};
     char error_buffer[CURL_ERROR_SIZE] = {};
 
@@ -108,7 +124,9 @@ HttpResponse HttpClient::post(const HttpRequest& request, const HttpDataCallback
         curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response.status);
     } else {
         curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &response.status);
-        response.error = error_buffer[0] != '\0' ? error_buffer : curl_easy_strerror(result);
+        if (response.error.empty()) {
+            response.error = error_buffer[0] != '\0' ? error_buffer : curl_easy_strerror(result);
+        }
     }
 
     curl_slist_free_all(header_list);

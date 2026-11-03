@@ -73,6 +73,24 @@ TEST(openai_reports_malformed_stream) {
     CHECK(result.text.empty());
 }
 
+TEST(openai_streams_cr_framed_events) {
+    const char* base = std::getenv("ST_MOCK_BASE_URL");
+    if (base == nullptr) {
+        return;
+    }
+    st::OpenAiClient client;
+    st::OpenAiRequest request;
+    request.base_url = std::string(base) + "/cr-stream";
+    request.model = "mock";
+    request.messages = {{"user", "Hi"}};
+    std::string chunks;
+    const auto result = client.generate(request, [&](const std::string& chunk) { chunks += chunk; });
+    CHECK(result.error.empty());
+    CHECK_EQ(result.status, 200L);
+    CHECK_EQ(result.text, "hello world");
+    CHECK_EQ(chunks, "hello world");
+}
+
 TEST(openai_keeps_partial_text_on_stream_error) {
     const char* base = std::getenv("ST_MOCK_BASE_URL");
     if (base == nullptr) {

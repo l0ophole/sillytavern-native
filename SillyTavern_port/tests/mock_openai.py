@@ -60,6 +60,19 @@ class Handler(BaseHTTPRequestHandler):
             self._write(body)
             return
 
+        if self.path.startswith("/cr-stream/"):
+            body = (
+                b'data: {"choices":[{"delta":{"content":"hello"}}]}\r\r'
+                b'data: {"choices":[{"delta":{"content":" world"}}]}\r\r'
+                b"data: [DONE]\r\r"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self._write(body)
+            return
+
         if self.path.startswith("/slow-partial/"):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")

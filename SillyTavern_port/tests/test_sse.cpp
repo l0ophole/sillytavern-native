@@ -56,6 +56,21 @@ TEST(sse_reset_clears_state) {
     CHECK_EQ(events[0].data, "fresh");
 }
 
+TEST(sse_handles_cr_only_line_endings) {
+    st::SseParser parser;
+    const auto events = parser.feed("data: hello\r\r");
+    CHECK_EQ(events.size(), std::size_t(1));
+    CHECK_EQ(events[0].data, "hello");
+}
+
+TEST(sse_handles_split_crlf) {
+    st::SseParser parser;
+    CHECK_EQ(parser.feed("data: hello\r").size(), std::size_t(0));
+    const auto events = parser.feed("\n\r\n");
+    CHECK_EQ(events.size(), std::size_t(1));
+    CHECK_EQ(events[0].data, "hello");
+}
+
 TEST(sse_feed_bytes_handles_embedded_nul) {
     st::SseParser parser;
     const char chunk[] = {'d', 'a', 't', 'a', ':', ' ', 'a', '\0', 'b', '\n', '\n'};

@@ -164,6 +164,7 @@ OpenAiResult OpenAiClient::generate(const OpenAiRequest& request,
         http_request.headers.push_back("Authorization: Bearer " + request.api_key);
     }
     http_request.timeout_seconds = request.timeout_seconds;
+    http_request.buffer_response_body = !request.sampling.stream;
 
     SseParser parser;
     StreamState state;

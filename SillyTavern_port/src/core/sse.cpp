@@ -10,17 +10,32 @@ std::vector<SseEvent> SseParser::feed(const char* data, std::size_t size) {
     buffer_.append(data, size);
 
     std::size_t start = 0;
-    while (true) {
-        const std::size_t newline = buffer_.find('\n', start);
-        if (newline == std::string::npos) {
+    if (pending_cr_) {
+        pending_cr_ = false;
+        if (start < buffer_.size() && buffer_[start] == '\n') {
+            ++start;
+        }
+    }
+    while (start < buffer_.size()) {
+        const std::size_t terminator = buffer_.find_first_of("\r\n", start);
+        if (terminator == std::string::npos) {
             break;
         }
-        std::string line = buffer_.substr(start, newline - start);
-        start = newline + 1;
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
+        const bool is_cr = buffer_[terminator] == '\r';
+        if (is_cr && terminator + 1 == buffer_.size()) {
+            // Consume the CR now but remember it: the next feed may begin with
+            // the LF of a CRLF pair, which must count as the same terminator.
+            process_line(buffer_.substr(start, terminator - start), events);
+            start = terminator + 1;
+            pending_cr_ = true;
+            break;
         }
-        process_line(line, events);
+        process_line(buffer_.substr(start, terminator - start), events);
+        std::size_t next = terminator + 1;
+        if (is_cr && buffer_[next] == '\n') {
+            ++next;
+        }
+        start = next;
     }
     buffer_.erase(0, start);
     return events;
@@ -32,23 +47,14 @@ std::vector<SseEvent> SseParser::feed(const std::string& data) {
 
 std::vector<SseEvent> SseParser::finish() {
     std::vector<SseEvent> events;
+    pending_cr_ = false;
     if (!buffer_.empty()) {
-        std::size_t start = 0;
-        while (true) {
-            const std::size_t newline = buffer_.find('\n', start);
-            std::string line = newline == std::string::npos
-                                   ? buffer_.substr(start)
-                                   : buffer_.substr(start, newline - start);
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
-            }
-            process_line(line, events);
-            if (newline == std::string::npos) {
-                break;
-            }
-            start = newline + 1;
-        }
+        std::string line = buffer_;
         buffer_.clear();
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        process_line(line, events);
     }
     dispatch(events);
     return events;
@@ -59,6 +65,7 @@ void SseParser::reset() {
     event_name_.clear();
     data_.clear();
     has_data_ = false;
+    pending_cr_ = false;
 }
 
 void SseParser::process_line(const std::string& line, std::vector<SseEvent>& events) {
