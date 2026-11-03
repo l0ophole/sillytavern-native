@@ -91,7 +91,7 @@ help:
 	@echo "Targets:"
 	@echo "  make              build the application"
 	@echo "  make menuconfig   edit the feature configuration"
-	@echo "  make defconfig    reset to all ported critical features"
+	@echo "  make defconfig    reset to all ported features"
 	@echo "  make test         build and run unit tests"
 	@echo "  make test-sanitize  build and run unit tests with ASan/UBSan"
 	@echo "  make smoke        run the GUI smoke test (GTK stage)"

@@ -5,6 +5,7 @@
 #include "core/prompt.h"
 #include "core/sampling.h"
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@ struct OpenAiRequest {
     std::vector<PromptMessage> messages;
     Sampling sampling;
     int timeout_seconds = 300;
+    std::size_t max_response_bytes = 16u * 1024u * 1024u;
 };
 
 struct OpenAiResult {

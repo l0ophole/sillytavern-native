@@ -13,6 +13,7 @@ struct StreamState {
     std::string text;
     std::string error;
     bool done = false;
+    std::size_t max_response_bytes = 16u * 1024u * 1024u;
     const OpenAiChunkCallback* on_chunk = nullptr;
 };
 
@@ -56,6 +57,11 @@ bool handle_event(const SseEvent& event, StreamState& state) {
         }
         const std::string chunk = delta["content"].get<std::string>();
         if (!chunk.empty()) {
+            if (state.text.size() > state.max_response_bytes ||
+                chunk.size() > state.max_response_bytes - state.text.size()) {
+                state.error = "streamed response exceeds limit";
+                return false;
+            }
             state.text += chunk;
             if (state.on_chunk != nullptr && *state.on_chunk) {
                 (*state.on_chunk)(chunk);
@@ -164,10 +170,12 @@ OpenAiResult OpenAiClient::generate(const OpenAiRequest& request,
         http_request.headers.push_back("Authorization: Bearer " + request.api_key);
     }
     http_request.timeout_seconds = request.timeout_seconds;
+    http_request.max_response_bytes = request.max_response_bytes;
     http_request.buffer_response_body = !request.sampling.stream;
 
     SseParser parser;
     StreamState state;
+    state.max_response_bytes = request.max_response_bytes;
     state.on_chunk = &on_chunk;
 
     HttpDataCallback data_callback;

@@ -62,7 +62,7 @@ v0.1.1 is a reliability release; it adds no v0.2 chat features.
 - Parser property tests and the `make test-sanitize` ASan/UBSan target
   (`5f05955`).
 - Both gates pass: `tests/verify_v01.sh` runs sanitizer tests, a clean normal
-  build, 154 unit tests, integration tests, 12 smoke markers, the menuconfig
+  build, 155 unit tests, integration tests, 12 smoke markers, the menuconfig
   selftest, the 105/21/84/2 feature counts with the P09/P10 membership check,
   the `0.1.1` version string, the GTK-free core, and a clean upstream tree.
   `tests/alpine_build.sh` repeats build, unit, integration, and smoke checks on
@@ -76,6 +76,17 @@ v0.1.1 is a reliability release; it adds no v0.2 chat features.
   cards and chat JSONL, and 16 MiB for compact drafts. Streaming draft writes
   are atomic and throttled to one per second, with each write fsynced on the
   GTK thread.
+- File I/O and JSONL parsing run on a worker, but transcript rendering
+  (`refresh_transcript`) and the prompt-budget recomputation still run on the
+  GTK thread after a load completes; a very large chat can stall the main loop
+  during that render.
+- Character scans run on a worker, but avatar decoding and `Gtk::ListBoxRow`
+  construction for the results still run on the GTK thread.
+- A draft captured during regeneration is not recoverable: the regenerated
+  reply is popped in memory before generation, so the draft's base no longer
+  matches the on-disk chat and is discarded on recovery. The previously saved
+  reply is preserved; no history is lost or duplicated.
+- Deleting or renaming a chat does not clear or move its pending draft.
 
 ## Stages
 
@@ -86,4 +97,4 @@ v0.1.1 is a reliability release; it adds no v0.2 chat features.
 | 2 Data compatibility | yes | yes | `make test` 65 tests; PNG ccv3 precedence, path containment, JSONL round-trip; D02 UI completed in stage 4 |
 | 3 Prompting/generation | yes | yes | `make test` 101 tests, `tests/integration_openai.sh` 101 tests; prompt order/macros, budget trimming, sampling clamps, SSE streaming/errors/cancellation |
 | 4 GTK UI | yes | yes | `make test` 127 tests, `make smoke` (8 markers: window, avatar, chat round-trip, message actions, chat lifecycle, character delete, live UI streaming, partial on switch), `tests/integration_openai.sh` 127 tests, menuconfig selftest; no warnings; `src/core/` GTK-free |
-| 5 Verification | yes | yes | `tests/verify_v01.sh`: sanitizer tests, clean build, 154 unit tests, integration tests, 12 smoke markers, menuconfig selftest, 105/21/84/2 counts with P09/P10 membership + all `CONFIG_*`/`ST_FEATURE_*` flags verified, `0.1.1` version string, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 154 unit + integration tests, 12 smoke markers |
+| 5 Verification | yes | yes | `tests/verify_v01.sh`: sanitizer tests, clean build, 155 unit tests, integration tests, 12 smoke markers, menuconfig selftest, 105/21/84/2 counts with P09/P10 membership + all `CONFIG_*`/`ST_FEATURE_*` flags verified, `0.1.1` version string, GTK-free core, clean upstream; `tests/alpine_build.sh` on alpine:3.20 (musl): build, 155 unit + integration tests, 12 smoke markers |

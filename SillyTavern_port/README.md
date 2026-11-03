@@ -15,8 +15,10 @@ single-user core-chat MVP; the full feature set is tracked in
 
 ## v0.1.1 scope
 
-- Single-instance protection through `instance.lock`; a second process reports
-  the holder PID instead of opening the same data.
+- Single-instance protection through `instance.lock`; the flock path makes a
+  second process report the holder PID instead of opening the same data. When a
+  session bus is present, a second launch may instead be forwarded to the
+  running instance by `Gtk::Application` before the lock is reached.
 - Per-chat advisory write locks so two processes cannot write one chat file.
 - Crash-recovery journal for streaming drafts, replayed on chat load.
 - Character-library scans and chat loads moved to background workers.
@@ -29,6 +31,20 @@ and new-chat writes remain synchronous on the GTK thread and are size-capped:
 1 MiB for `settings.json`, 64 MiB for character cards and chat logs, and 16 MiB
 for compact drafts. Streaming draft writes are atomic and throttled to one per
 second, with each write fsynced on the GTK thread.
+
+Known v0.1.1 limitations:
+
+- File I/O and JSONL parsing run on a worker, but transcript rendering
+  (`refresh_transcript`) and the prompt-budget recomputation still run on the
+  GTK thread after a load completes; a very large chat can stall the main loop
+  during that render.
+- Character scans run on a worker, but avatar decoding and `Gtk::ListBoxRow`
+  construction for the results still run on the GTK thread.
+- A draft captured during regeneration is not recoverable: the regenerated reply
+  is popped in memory before generation, so the draft's base no longer matches
+  the on-disk chat and is discarded on recovery. The previously saved reply is
+  preserved; no history is lost or duplicated.
+- Deleting or renaming a chat does not clear or move its pending draft.
 
 The original JavaScript frontend is not embedded. No Node.js or WebKit is used.
 
@@ -54,7 +70,7 @@ required.
 ```sh
 make                 # build with the current .config
 make menuconfig      # configure the feature set
-make defconfig       # reset to all currently ported critical features
+make defconfig       # reset to all ported features
 make test            # run unit tests
 make test-sanitize   # run unit tests with ASan/UBSan
 make smoke           # run the GUI smoke test under Xvfb
