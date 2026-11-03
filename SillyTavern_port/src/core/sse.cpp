@@ -1,5 +1,7 @@
 #include "core/sse.h"
 
+#include <algorithm>
+
 namespace st {
 
 SseParser::SseParser(std::size_t max_event_bytes) : max_event_bytes_(max_event_bytes) {}
@@ -23,8 +25,10 @@ std::vector<SseEvent> SseParser::feed(const char* data, std::size_t size) {
         }
     }
     while (start < buffer_.size()) {
-        const std::size_t terminator = buffer_.find_first_of("\r\n", start);
+        const std::size_t search_from = std::max(start, scanned_);
+        const std::size_t terminator = buffer_.find_first_of("\r\n", search_from);
         if (terminator == std::string::npos) {
+            scanned_ = buffer_.size();
             break;
         }
         const bool is_cr = buffer_[terminator] == '\r';
@@ -50,6 +54,7 @@ std::vector<SseEvent> SseParser::feed(const char* data, std::size_t size) {
         start = next;
     }
     buffer_.erase(0, start);
+    scanned_ = buffer_.size();
     return events;
 }
 
@@ -66,6 +71,7 @@ std::vector<SseEvent> SseParser::finish() {
     if (!buffer_.empty()) {
         std::string line = buffer_;
         buffer_.clear();
+        scanned_ = 0;
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
@@ -82,6 +88,7 @@ void SseParser::reset() {
     failed_ = false;
     error_.clear();
     buffer_.clear();
+    scanned_ = 0;
     event_name_.clear();
     data_.clear();
     has_data_ = false;
@@ -92,6 +99,7 @@ void SseParser::fail() {
     failed_ = true;
     error_ = "SSE event exceeds size limit";
     buffer_.clear();
+    scanned_ = 0;
     event_name_.clear();
     data_.clear();
     has_data_ = false;

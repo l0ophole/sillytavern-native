@@ -32,6 +32,7 @@ private:
     bool failed_ = false;
     std::string error_;
     std::string buffer_;
+    std::size_t scanned_ = 0;
     std::string event_name_;
     std::string data_;
     bool has_data_ = false;
