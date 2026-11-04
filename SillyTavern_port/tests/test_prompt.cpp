@@ -114,3 +114,104 @@ TEST(prompt_appends_post_history_instructions_last) {
     CHECK_EQ(messages.back().role, "system");
     CHECK_EQ(messages.back().content, "Be brief, Alice.");
 }
+
+static std::vector<st::ChatMessage> five_message_history() {
+    std::vector<st::ChatMessage> history;
+    for (int i = 0; i < 5; ++i) {
+        st::ChatMessage message;
+        message.name = "Alice";
+        message.is_user = (i % 2 == 0);
+        message.mes = "msg" + std::to_string(i);
+        history.push_back(message);
+    }
+    return history;
+}
+
+TEST(prompt_inserts_authors_note_at_depth) {
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.authors_note_enabled = true;
+    settings.authors_note = "note";
+    settings.authors_note_depth = 2;
+
+    const auto parts =
+        st::build_prompt_parts(card, settings, five_message_history());
+    CHECK_EQ(parts.history.size(), std::size_t(6));
+    CHECK_EQ(parts.history[3].role, "system");
+    CHECK_EQ(parts.history[3].content, "note");
+    CHECK_EQ(parts.history[4].content, "msg3");
+    CHECK_EQ(parts.history[5].content, "msg4");
+
+    // Macro expansion happens exactly like other prompt text.
+    settings.authors_note = "For {{char}} and {{user}}";
+    const auto expanded =
+        st::build_prompt_parts(card, settings, five_message_history());
+    CHECK_EQ(expanded.history[3].content, "For Seraphina and Alice");
+
+    // Depth exceeding history length: every history message follows the note.
+    settings.authors_note = "note";
+    settings.authors_note_depth = 100;
+    const auto capped =
+        st::build_prompt_parts(card, settings, five_message_history());
+    CHECK_EQ(capped.history.size(), std::size_t(6));
+    CHECK_EQ(capped.history[0].role, "system");
+    CHECK_EQ(capped.history[0].content, "note");
+    for (std::size_t i = 1; i < capped.history.size(); ++i) {
+        CHECK(capped.history[i].content != "note");
+    }
+}
+
+TEST(prompt_authors_note_depth_zero_appends_last) {
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    card.post_history_instructions = "Stay in character.";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.authors_note_enabled = true;
+    settings.authors_note = "note";
+    settings.authors_note_depth = 0;
+
+    const auto parts =
+        st::build_prompt_parts(card, settings, five_message_history());
+    CHECK_EQ(parts.history.size(), std::size_t(6));
+    CHECK_EQ(parts.history.back().role, "system");
+    CHECK_EQ(parts.history.back().content, "note");
+
+    // Note lives in history, before post_history_instructions in trailing_system.
+    CHECK_EQ(parts.trailing_system.size(), std::size_t(1));
+    CHECK_EQ(parts.trailing_system[0].content, "Stay in character.");
+    const auto messages =
+        st::build_prompt(card, settings, five_message_history());
+    // leading system + 6 history (note last) + trailing post_history_instructions
+    CHECK_EQ(messages.size(), std::size_t(8));
+    CHECK_EQ(messages[6].content, "note");
+    CHECK_EQ(messages[7].content, "Stay in character.");
+}
+
+TEST(prompt_authors_note_disabled_or_empty_is_absent) {
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+
+    // Disabled (default) even with note text present.
+    settings.authors_note_enabled = false;
+    settings.authors_note = "note";
+    settings.authors_note_depth = 2;
+    auto parts = st::build_prompt_parts(card, settings, five_message_history());
+    CHECK_EQ(parts.history.size(), std::size_t(5));
+    for (const auto& message : parts.history) {
+        CHECK(message.content != "note");
+    }
+
+    // Enabled but empty note (and whitespace/expansion-empty note).
+    settings.authors_note_enabled = true;
+    settings.authors_note = "";
+    parts = st::build_prompt_parts(card, settings, five_message_history());
+    CHECK_EQ(parts.history.size(), std::size_t(5));
+    for (const auto& message : parts.history) {
+        CHECK(message.content != "note");
+    }
+}

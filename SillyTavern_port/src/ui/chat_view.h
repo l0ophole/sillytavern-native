@@ -41,6 +41,9 @@ public:
     const std::string& current_filename() const { return filename_; }
     bool is_streaming() const { return streaming_; }
     bool is_loading() const { return loading_; }
+    void on_regenerate();
+    bool swipe_current(int delta);
+    bool branch_from(std::size_t index);
 
 private:
     struct ChatLoadResult {
@@ -72,8 +75,10 @@ private:
 
     void on_edit_message();
     void on_delete_message();
-    void on_regenerate();
     void on_continue();
+    void on_add_bookmark();
+    void rebuild_bookmarks_menu();
+    void jump_to_bookmark(std::size_t index);
 
     bool start_generation(st::OpenAiRequest request, bool continue_mode = false);
     void finish_generation(const st::OpenAiResult& result);
@@ -119,6 +124,11 @@ private:
     Gtk::MenuItem delete_item_;
     Gtk::MenuItem regenerate_item_;
     Gtk::MenuItem continue_item_;
+    Gtk::MenuItem swipe_prev_item_;
+    Gtk::MenuItem swipe_next_item_;
+    Gtk::MenuItem branch_item_;
+    Gtk::MenuItem bookmarks_item_;
+    Gtk::Menu bookmarks_menu_;
     struct MessageRange {
         std::size_t begin = 0;
         std::size_t end = 0;

@@ -7,6 +7,7 @@
 #include "core/json.h"
 #include "ui/avatar.h"
 #include "ui/main_window.h"
+#include "ui/settings_dialog.h"
 
 #include <glib.h>
 #include <glibmm/main.h>
@@ -149,6 +150,65 @@ std::string make_smoke_png(const std::string& name = "Smoke Test") {
 
     append_chunk(png, "IEND", std::string());
     return png;
+}
+
+// Returns the plain text of the (non-editable) transcript TextView found
+// under the given container, recursing into nested containers.
+std::string transcript_text(Gtk::Container& container) {
+    for (Gtk::Widget* child : container.get_children()) {
+        if (auto* view = dynamic_cast<Gtk::TextView*>(child)) {
+            if (!view->get_editable()) {
+                return view->get_buffer()->get_text();
+            }
+        }
+        if (auto* nested = dynamic_cast<Gtk::Container*>(child)) {
+            std::string found = transcript_text(*nested);
+            if (!found.empty()) {
+                return found;
+            }
+        }
+    }
+    return {};
+}
+
+// Finds the first widget of the requested type under the given widget,
+// recursing into nested containers.
+template <typename T>
+T* find_widget(Gtk::Widget& widget) {
+    if (auto* found = dynamic_cast<T*>(&widget)) {
+        return found;
+    }
+    if (auto* container = dynamic_cast<Gtk::Container*>(&widget)) {
+        for (Gtk::Widget* child : container->get_children()) {
+            if (T* nested = find_widget<T>(*child)) {
+                return nested;
+            }
+        }
+    }
+    return nullptr;
+}
+
+bool selector_has_file(Gtk::Container& container, const std::string& filename) {
+    for (Gtk::Widget* child : container.get_children()) {
+        if (auto* combo = dynamic_cast<Gtk::ComboBoxText*>(child)) {
+            const auto model = combo->get_model();
+            if (model) {
+                for (const auto& row : model->children()) {
+                    Glib::ustring value;
+                    row.get_value(0, value);
+                    if (value == filename) {
+                        return true;
+                    }
+                }
+            }
+        }
+        if (auto* nested = dynamic_cast<Gtk::Container*>(child)) {
+            if (selector_has_file(*nested, filename)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 }  // namespace
@@ -578,6 +638,64 @@ int run_smoke_test() {
             }
             std::cout << "smoke: ui streaming\n";
 
+            {
+                const std::string swipe_filename = mock_chats.back();
+                const std::size_t last = chats.load("mock", swipe_filename).messages.size() - 1;
+                st::ChatSession before_regen(mock_entry.card,
+                                              mock_settings,
+                                              chats,
+                                              "mock",
+                                              swipe_filename,
+                                              chats.load("mock", swipe_filename));
+                if (before_regen.swipe_count(last) != 1) {
+                    std::cerr << "smoke: swipes initial count mismatch\n";
+                    return 1;
+                }
+
+                view.on_regenerate();
+                const gint64 regen_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+                while (g_get_monotonic_time() < regen_deadline) {
+                    while (Glib::MainContext::get_default()->iteration(false)) {
+                    }
+                    if (!view.is_streaming() && ui_status != "Generating...") {
+                        break;
+                    }
+                    g_usleep(5000);
+                }
+                if (view.is_streaming()) {
+                    std::cerr << "smoke: regenerate timed out\n";
+                    return 1;
+                }
+
+                st::ChatSession after_regen(mock_entry.card,
+                                             mock_settings,
+                                             chats,
+                                             "mock",
+                                             swipe_filename,
+                                             chats.load("mock", swipe_filename));
+                if (after_regen.swipe_count(last) != 2 ||
+                    after_regen.swipe_index(last) != 1) {
+                    std::cerr << "smoke: regenerate did not add a swipe\n";
+                    return 1;
+                }
+                if (!view.swipe_current(-1)) {
+                    std::cerr << "smoke: swipe_current failed\n";
+                    return 1;
+                }
+                st::ChatSession after_swipe(mock_entry.card,
+                                             mock_settings,
+                                             chats,
+                                             "mock",
+                                             swipe_filename,
+                                             chats.load("mock", swipe_filename));
+                if (after_swipe.swipe_index(last) != 0 ||
+                    after_swipe.chat().messages[last].mes != "hello world") {
+                    std::cerr << "smoke: swipe did not restore original text\n";
+                    return 1;
+                }
+                std::cout << "smoke: swipes\n";
+            }
+
             st::Settings slow_settings = mock_settings;
             slow_settings.api_base_url = std::string(mock_base) + "/slow-partial";
 
@@ -635,6 +753,145 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: partial on switch\n";
+
+            // Cancelling (switching away) mid-regenerate must preserve the
+            // popped original reply as a swipe instead of discarding it.
+            st::CharacterEntry regen_entry;
+            regen_entry.id = "regen-bot";
+            regen_entry.card.name = "RegenBot";
+            regen_entry.card.system_prompt = "Test.";
+            regen_entry.card.first_mes = "Greeting.";
+
+            st::Chat regen_chat = chats.create("regen-bot",
+                                               st::normalize_user_name(settings.user_name),
+                                               "Greeting.");
+            st::ChatMessage regen_user;
+            regen_user.name = st::normalize_user_name(settings.user_name);
+            regen_user.is_user = true;
+            regen_user.send_date = "2026-11-01T00:00:01Z";
+            regen_user.mes = "Hi";
+            regen_chat.messages.push_back(regen_user);
+            st::ChatMessage regen_original;
+            regen_original.name = "RegenBot";
+            regen_original.send_date = "2026-11-01T00:00:02Z";
+            regen_original.mes = "original";
+            regen_chat.messages.push_back(regen_original);
+            chats.save("regen-bot", "regen.jsonl", regen_chat);
+
+            ChatView regen_view(chats, slow_settings, [](const std::string&) {});
+            regen_view.show_all();
+            if (!regen_view.set_character(regen_entry)) {
+                std::cerr << "smoke: cancel-regenerate set_character failed\n";
+                return 1;
+            }
+            regen_view.on_regenerate();
+            if (!regen_view.is_streaming()) {
+                std::cerr << "smoke: regenerate did not start streaming\n";
+                return 1;
+            }
+
+            bool regen_draft_seen = false;
+            const gint64 regen_wait = g_get_monotonic_time() + 1000 * 1000;
+            while (g_get_monotonic_time() < regen_wait) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                try {
+                    const std::optional<st::ChatDraft> draft =
+                        chats.load_draft("regen-bot", "regen.jsonl");
+                    if (draft.has_value() &&
+                        draft->text.find("partial") != std::string::npos) {
+                        regen_draft_seen = true;
+                        break;
+                    }
+                } catch (const std::exception&) {
+                }
+                g_usleep(5000);
+            }
+            if (!regen_draft_seen) {
+                std::cerr << "smoke: regenerate draft missing\n";
+                return 1;
+            }
+            // Drop the draft so the reload does not re-recover it; the
+            // assertion below targets the stop_streaming save alone.
+            chats.clear_draft("regen-bot", "regen.jsonl");
+            regen_view.set_character(regen_entry);
+
+            const st::Chat regen_saved = chats.load("regen-bot", "regen.jsonl");
+            if (regen_saved.messages.size() != std::size_t(3)) {
+                std::cerr << "smoke: cancel during regenerate message count mismatch\n";
+                return 1;
+            }
+            const std::size_t regen_last = regen_saved.messages.size() - 1;
+            st::ChatSession regen_session(regen_entry.card,
+                                          settings,
+                                          chats,
+                                          "regen-bot",
+                                          "regen.jsonl",
+                                          regen_saved);
+            if (regen_session.swipe_count(regen_last) != 2 ||
+                regen_session.swipe_index(regen_last) != 1 ||
+                regen_session.chat().messages[regen_last].mes != "partial" ||
+                !regen_session.select_swipe(regen_last, 0) ||
+                regen_session.chat().messages[regen_last].mes != "original") {
+                std::cerr << "smoke: cancel during regenerate lost the original reply\n";
+                return 1;
+            }
+            std::cout << "smoke: cancel during regenerate\n";
+
+            // Backup/Restore stay disabled while a generation streams, so
+            // a restore cannot clobber the just-restored files.
+            {
+                st::Settings guard_settings = settings;
+                guard_settings.api_base_url = std::string(mock_base) + "/slow-partial";
+                guard_settings.model = "mock";
+                guard_settings.stream = true;
+                MainWindow guard_window(paths, guard_settings, characters, chats);
+                guard_window.show_all();
+
+                auto* guard_list = find_widget<CharacterList>(guard_window);
+                auto* guard_view = find_widget<ChatView>(guard_window);
+                if (guard_list == nullptr || guard_view == nullptr) {
+                    std::cerr << "smoke: backup guard widgets missing\n";
+                    return 1;
+                }
+                const gint64 guard_scan_deadline =
+                    g_get_monotonic_time() + 5 * 1000 * 1000;
+                while ((guard_list->is_scanning() || guard_list->visible_entries().empty()) &&
+                       g_get_monotonic_time() < guard_scan_deadline) {
+                    while (Glib::MainContext::get_default()->iteration(false)) {
+                    }
+                    g_usleep(1000);
+                }
+                guard_list->select_id(entry.id);
+                const gint64 guard_load_deadline =
+                    g_get_monotonic_time() + 5 * 1000 * 1000;
+                while (guard_view->current_filename().empty() &&
+                       g_get_monotonic_time() < guard_load_deadline) {
+                    while (Glib::MainContext::get_default()->iteration(false)) {
+                    }
+                    g_usleep(1000);
+                }
+                if (guard_view->current_filename().empty()) {
+                    std::cerr << "smoke: backup guard character load failed\n";
+                    return 1;
+                }
+                if (!guard_view->submit_message("Hi")) {
+                    std::cerr << "smoke: backup guard submit failed\n";
+                    return 1;
+                }
+                if (!guard_view->is_streaming() ||
+                    guard_window.backup_actions_enabled()) {
+                    std::cerr << "smoke: backup actions not disabled while streaming\n";
+                    return 1;
+                }
+                guard_view->clear();
+                if (guard_view->is_streaming() ||
+                    !guard_window.backup_actions_enabled()) {
+                    std::cerr << "smoke: backup actions not re-enabled after streaming\n";
+                    return 1;
+                }
+                std::cout << "smoke: backup guard while streaming\n";
+            }
         }
 
         {
@@ -682,6 +939,165 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: crash recovery\n";
+        }
+
+        {
+            st::CharacterEntry branch_entry;
+            branch_entry.id = "branch-bot";
+            branch_entry.card.name = "BranchBot";
+            branch_entry.card.system_prompt = "Test.";
+            branch_entry.card.first_mes = "Greeting.";
+
+            st::Chat branch_chat = chats.create(
+                "branch-bot", st::normalize_user_name(settings.user_name), "Greeting.");
+            st::ChatMessage branch_user;
+            branch_user.name = st::normalize_user_name(settings.user_name);
+            branch_user.is_user = true;
+            branch_user.send_date = "2026-11-01T00:00:01Z";
+            branch_user.mes = "Branch user";
+            branch_chat.messages.push_back(branch_user);
+            st::ChatMessage branch_assistant;
+            branch_assistant.name = "BranchBot";
+            branch_assistant.send_date = "2026-11-01T00:00:02Z";
+            branch_assistant.mes = "Branch assistant";
+            branch_chat.messages.push_back(branch_assistant);
+            chats.save("branch-bot", "branch-source.jsonl", branch_chat);
+
+            ChatView branch_view(chats, settings, [](const std::string&) {});
+            branch_view.show_all();
+            if (!branch_view.set_character(branch_entry)) {
+                std::cerr << "smoke: branch set_character failed\n";
+                return 1;
+            }
+            if (!branch_view.branch_from(1)) {
+                std::cerr << "smoke: branch_from failed\n";
+                return 1;
+            }
+            const gint64 branch_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (branch_view.is_loading() &&
+                   g_get_monotonic_time() < branch_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (branch_view.is_loading() ||
+                branch_view.current_filename().find("branch") == std::string::npos) {
+                std::cerr << "smoke: branch load failed: "
+                          << branch_view.current_filename() << '\n';
+                return 1;
+            }
+            const st::Chat branched = chats.load("branch-bot", branch_view.current_filename());
+            const st::Chat source_chat = chats.load("branch-bot", "branch-source.jsonl");
+            if (branched.messages.size() != std::size_t(2) ||
+                source_chat.messages.size() != std::size_t(3)) {
+                std::cerr << "smoke: branch message count mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: branch\n";
+        }
+
+        {
+            st::Settings dialog_settings = settings;
+            bool saved = false;
+            {
+                SettingsDialog dialog(window, paths, dialog_settings, [&saved]() { saved = true; });
+                dialog.show_all();
+                dialog.authors_note_enabled_widget().set_active(true);
+                dialog.authors_note_widget().get_buffer()->set_text("Stay in character.");
+                dialog.authors_note_depth_widget().set_value(1);
+                dialog.response(Gtk::RESPONSE_OK);
+            }
+            if (!saved || !dialog_settings.authors_note_enabled ||
+                dialog_settings.authors_note != "Stay in character." ||
+                dialog_settings.authors_note_depth != 1) {
+                std::cerr << "smoke: authors note save failed\n";
+                return 1;
+            }
+            {
+                SettingsDialog reopened(window, paths, dialog_settings, []() {});
+                if (!reopened.authors_note_enabled_widget().get_active() ||
+                    reopened.authors_note_widget().get_buffer()->get_text() != "Stay in character." ||
+                    reopened.authors_note_depth_widget().get_value_as_int() != 1) {
+                    std::cerr << "smoke: authors note round-trip failed\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: authors note\n";
+        }
+
+        {
+            st::CharacterEntry md_entry;
+            md_entry.id = "md-bot";
+            md_entry.card.name = "MdBot";
+            md_entry.card.first_mes = "Hi.";
+
+            st::Chat md_chat = chats.create(
+                "md-bot", st::normalize_user_name(settings.user_name), "Hi.");
+            st::ChatMessage md_assistant;
+            md_assistant.name = "MdBot";
+            md_assistant.send_date = "2026-11-01T00:00:02Z";
+            md_assistant.mes = "**bold** and <tag>";
+            md_chat.messages.push_back(md_assistant);
+            chats.save("md-bot", "md.jsonl", md_chat);
+
+            ChatView md_view(chats, settings, [](const std::string&) {});
+            md_view.show_all();
+            if (!md_view.set_character(md_entry)) {
+                std::cerr << "smoke: markdown render failed\n";
+                return 1;
+            }
+            const std::string rendered = transcript_text(md_view);
+            if (rendered.find("bold and <tag>") == std::string::npos ||
+                rendered.find("**") != std::string::npos) {
+                std::cerr << "smoke: markdown render mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: markdown render\n";
+        }
+
+        {
+            chats.save(entry.id,
+                       "backup-target.jsonl",
+                       chats.create(entry.id,
+                                    st::normalize_user_name(settings.user_name),
+                                    entry.card.first_mes));
+            const std::string backup_id = window.create_backup();
+            if (backup_id.empty()) {
+                std::cerr << "smoke: create_backup failed\n";
+                return 1;
+            }
+            chats.remove(entry.id, "backup-target.jsonl");
+
+            ChatView check_view(chats, settings, [](const std::string&) {});
+            check_view.show_all();
+            if (!check_view.set_character(entry)) {
+                std::cerr << "smoke: backup check set_character failed\n";
+                return 1;
+            }
+            if (selector_has_file(check_view, "backup-target.jsonl")) {
+                std::cerr << "smoke: backup target should be missing\n";
+                return 1;
+            }
+            if (!window.restore_backup(backup_id)) {
+                std::cerr << "smoke: restore_backup failed\n";
+                return 1;
+            }
+            if (!check_view.set_character(entry)) {
+                std::cerr << "smoke: backup check set_character failed\n";
+                return 1;
+            }
+            const gint64 backup_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (check_view.is_loading() && g_get_monotonic_time() < backup_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (check_view.is_loading() ||
+                !selector_has_file(check_view, "backup-target.jsonl")) {
+                std::cerr << "smoke: backup round trip failed\n";
+                return 1;
+            }
+            std::cout << "smoke: backup round trip\n";
         }
 
         window.hide();

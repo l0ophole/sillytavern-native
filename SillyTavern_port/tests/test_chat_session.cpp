@@ -458,6 +458,53 @@ TEST(chat_session_replaces_last_message_on_regenerate_recovery) {
     CHECK_EQ(session.chat().messages.back().mes, "new");
     CHECK_EQ(session.chat().messages.back().send_date, "2026-11-01T00:00:03Z");
     CHECK_EQ(session.chat().messages.front().mes, "Hi");
+    CHECK_EQ(session.swipe_count(1), 2u);
+    CHECK_EQ(session.swipe_index(1), 1u);
+    CHECK(session.select_swipe(1, 0));
+    CHECK_EQ(session.chat().messages.back().mes, "old");
+}
+
+TEST(chat_session_recover_draft_preserves_existing_swipes) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.send_date = "2026-11-01T00:00:01Z";
+    user.mes = "Hi";
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.is_user = false;
+    assistant.is_system = false;
+    assistant.send_date = "2026-11-01T00:00:02Z";
+    assistant.mes = "A";
+    chat.messages = {user, assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.add_swipe(1, "B"));
+    CHECK_EQ(session.swipe_count(1), 2u);
+    CHECK_EQ(session.chat().messages.back().mes, "B");
+
+    st::ChatDraft draft;
+    draft.text = "C";
+    draft.send_date = "2026-11-01T00:00:03Z";
+    draft.base_messages = 1;
+    draft.replace_last = true;
+    CHECK(session.recover_draft(draft));
+    CHECK_EQ(session.chat().messages.size(), 2u);
+    CHECK_EQ(session.chat().messages.back().mes, "C");
+    CHECK_EQ(session.swipe_count(1), 3u);
+    CHECK_EQ(session.swipe_index(1), 2u);
+    CHECK(session.select_swipe(1, 0));
+    CHECK_EQ(session.chat().messages.back().mes, "A");
+    CHECK(session.select_swipe(1, 1));
+    CHECK_EQ(session.chat().messages.back().mes, "B");
 }
 
 TEST(chat_session_rejects_regenerate_draft_when_base_is_stale) {
@@ -580,4 +627,125 @@ TEST(session_continue_requires_assistant_tail) {
         make_card(), settings, store, "Seraphina", "trailing.jsonl", trailing_empty);
     CHECK(trailing_session.can_continue());
     CHECK_EQ(trailing_session.continue_prefix(), "Hello");
+}
+
+TEST(chat_session_swipes_default_to_the_message_text) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage message;
+    message.name = "Seraphina";
+    message.mes = "hello";
+    chat.messages = {message};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK_EQ(session.swipe_count(0), 1u);
+    CHECK_EQ(session.swipe_index(0), 0u);
+    CHECK_EQ(session.chat().messages[0].mes, "hello");
+}
+
+TEST(chat_session_add_and_select_swipe) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_assistant("one");
+    CHECK(session.add_swipe(0, "two"));
+    CHECK_EQ(session.swipe_count(0), 2u);
+    CHECK_EQ(session.swipe_index(0), 1u);
+    CHECK_EQ(session.chat().messages[0].mes, "two");
+    CHECK(session.select_swipe(0, 0));
+    CHECK_EQ(session.chat().messages[0].mes, "one");
+    CHECK(!session.select_swipe(0, 7));
+    CHECK_EQ(session.chat().messages[0].mes, "one");
+}
+
+TEST(chat_session_swipes_survive_save_and_load) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_assistant("one");
+    CHECK(session.add_swipe(0, "two"));
+    CHECK(session.select_swipe(0, 0));
+    session.save();
+
+    const st::Chat loaded = store.load("Seraphina", "chat.jsonl");
+    CHECK_EQ(loaded.messages.size(), 1u);
+    CHECK_EQ(loaded.messages[0].extra["swipes"].size(), 2u);
+    CHECK_EQ(loaded.messages[0].extra["swipe_id"].get<int>(), 0);
+    CHECK_EQ(loaded.messages[0].mes, "one");
+}
+
+TEST(chat_session_branch_copies_prefix_only) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello there.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_user("message 1");
+    session.append_assistant("message 2");
+    session.append_user("message 3");
+    CHECK_EQ(session.chat().messages.size(), 4u);
+
+    const st::Chat branch = session.branch(1);
+    CHECK_EQ(branch.messages.size(), 2u);
+    CHECK_EQ(branch.messages[1].mes, session.chat().messages[1].mes);
+    CHECK_EQ(branch.messages[1].mes, "message 1");
+    CHECK_EQ(session.chat().messages.size(), 4u);
+    CHECK_EQ(session.chat().messages[3].mes, "message 3");
+    CHECK(!branch.metadata.create_date.empty());
+
+    const st::Chat empty = session.branch(99);
+    CHECK(empty.messages.empty());
+    CHECK_EQ(session.chat().messages.size(), 4u);
+}
+
+TEST(chat_session_bookmarks_round_trip) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello there.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_user("message 1");
+    session.append_assistant("message 2");
+
+    CHECK(session.add_bookmark(2, "here"));
+    CHECK(!session.add_bookmark(99, "nowhere"));
+    const auto bookmarks = session.bookmarks();
+    CHECK_EQ(bookmarks.size(), 1u);
+    CHECK_EQ(bookmarks[0].first, 2u);
+    CHECK_EQ(bookmarks[0].second, "here");
+
+    session.save();
+    const st::Chat loaded = store.load("Seraphina", "chat.jsonl");
+    st::ChatSession reloaded_session(
+        make_card(), settings, store, "Seraphina", "chat.jsonl", loaded);
+    const auto loaded_bookmarks = reloaded_session.bookmarks();
+    CHECK_EQ(loaded_bookmarks.size(), 1u);
+    CHECK_EQ(loaded_bookmarks[0].first, 2u);
+    CHECK_EQ(loaded_bookmarks[0].second, "here");
+
+    CHECK(session.remove_bookmark(2));
+    CHECK(session.bookmarks().empty());
+    CHECK(!session.remove_bookmark(2));
 }

@@ -103,8 +103,33 @@ if ! grep -q 'smoke: crash recovery' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: branch' <<<"$output"; then
+    echo "smoke test failed: branch failed" >&2
+    exit 1
+fi
+
+if ! grep -q 'smoke: authors note' <<<"$output"; then
+    echo "smoke test failed: authors note failed" >&2
+    exit 1
+fi
+
+if ! grep -q 'smoke: markdown render' <<<"$output"; then
+    echo "smoke test failed: markdown render failed" >&2
+    exit 1
+fi
+
+if ! grep -q 'smoke: backup round trip' <<<"$output"; then
+    echo "smoke test failed: backup round trip failed" >&2
+    exit 1
+fi
+
 if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: ui streaming' <<<"$output"; then
     echo "smoke test failed: UI streaming failed" >&2
+    exit 1
+fi
+
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: swipes' <<<"$output"; then
+    echo "smoke test failed: swipes failed" >&2
     exit 1
 fi
 
@@ -115,5 +140,15 @@ fi
 
 if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: autosave journal' <<<"$output"; then
     echo "smoke test failed: autosave journal failed" >&2
+    exit 1
+fi
+
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: cancel during regenerate' <<<"$output"; then
+    echo "smoke test failed: cancel during regenerate failed" >&2
+    exit 1
+fi
+
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: backup guard while streaming' <<<"$output"; then
+    echo "smoke test failed: backup guard while streaming failed" >&2
     exit 1
 fi

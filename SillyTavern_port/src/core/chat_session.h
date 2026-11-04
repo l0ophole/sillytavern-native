@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace st {
@@ -35,6 +36,14 @@ public:
 
     void append_user(const std::string& text);
     void append_assistant(const std::string& text);
+    std::size_t swipe_count(std::size_t index) const;
+    std::size_t swipe_index(std::size_t index) const;
+    bool select_swipe(std::size_t index, std::size_t swipe);
+    bool add_swipe(std::size_t index, const std::string& text);
+    Chat branch(std::size_t index) const;
+    bool add_bookmark(std::size_t index, const std::string& label);
+    bool remove_bookmark(std::size_t index);
+    std::vector<std::pair<std::size_t, std::string>> bookmarks() const;
     bool recover_draft(const ChatDraft& draft);
     void save() const;
 

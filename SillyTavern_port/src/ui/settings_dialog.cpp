@@ -55,9 +55,18 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     timeout_.set_increments(5.0, 30.0);
     timeout_.set_digits(0);
 
+    authors_note_enabled_.set_label("Enable author's note");
+    authors_note_depth_.set_range(0.0, 100.0);
+    authors_note_depth_.set_increments(1.0, 1.0);
+    authors_note_depth_.set_digits(0);
+
     prompt_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
     prompt_scroll_.set_size_request(-1, 120);
     prompt_scroll_.add(system_prompt_);
+
+    authors_note_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    authors_note_scroll_.set_size_request(-1, 80);
+    authors_note_scroll_.add(authors_note_);
 
     int row = 0;
     grid_.attach(*make_label("API base URL"), 0, row);
@@ -82,6 +91,12 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     grid_.attach(stream_, 1, row++);
     grid_.attach(*make_label("Request timeout (s)"), 0, row);
     grid_.attach(timeout_, 1, row++);
+    grid_.attach(*make_label("Author's note"), 0, row);
+    grid_.attach(authors_note_enabled_, 1, row++);
+    grid_.attach(*make_label("Note"), 0, row);
+    grid_.attach(authors_note_scroll_, 1, row++);
+    grid_.attach(*make_label("Note depth"), 0, row);
+    grid_.attach(authors_note_depth_, 1, row++);
 
     get_content_area()->pack_start(grid_, true, true, 0);
 
@@ -103,6 +118,9 @@ void SettingsDialog::load() {
     system_prompt_.get_buffer()->set_text(settings_.system_prompt);
     stream_.set_active(settings_.stream);
     timeout_.set_value(settings_.request_timeout_seconds);
+    authors_note_enabled_.set_active(settings_.authors_note_enabled);
+    authors_note_.get_buffer()->set_text(settings_.authors_note);
+    authors_note_depth_.set_value(settings_.authors_note_depth);
 }
 
 st::Settings SettingsDialog::build_settings() const {
@@ -118,6 +136,9 @@ st::Settings SettingsDialog::build_settings() const {
     candidate.system_prompt = system_prompt_.get_buffer()->get_text();
     candidate.stream = stream_.get_active();
     candidate.request_timeout_seconds = timeout_.get_value_as_int();
+    candidate.authors_note_enabled = authors_note_enabled_.get_active();
+    candidate.authors_note = authors_note_.get_buffer()->get_text();
+    candidate.authors_note_depth = authors_note_depth_.get_value_as_int();
     candidate.validate();
     return candidate;
 }
