@@ -736,6 +736,90 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: partial on switch\n";
+
+            // Cancelling (switching away) mid-regenerate must preserve the
+            // popped original reply as a swipe instead of discarding it.
+            st::CharacterEntry regen_entry;
+            regen_entry.id = "regen-bot";
+            regen_entry.card.name = "RegenBot";
+            regen_entry.card.system_prompt = "Test.";
+            regen_entry.card.first_mes = "Greeting.";
+
+            st::Chat regen_chat = chats.create("regen-bot",
+                                               st::normalize_user_name(settings.user_name),
+                                               "Greeting.");
+            st::ChatMessage regen_user;
+            regen_user.name = st::normalize_user_name(settings.user_name);
+            regen_user.is_user = true;
+            regen_user.send_date = "2026-11-01T00:00:01Z";
+            regen_user.mes = "Hi";
+            regen_chat.messages.push_back(regen_user);
+            st::ChatMessage regen_original;
+            regen_original.name = "RegenBot";
+            regen_original.send_date = "2026-11-01T00:00:02Z";
+            regen_original.mes = "original";
+            regen_chat.messages.push_back(regen_original);
+            chats.save("regen-bot", "regen.jsonl", regen_chat);
+
+            ChatView regen_view(chats, slow_settings, [](const std::string&) {});
+            regen_view.show_all();
+            if (!regen_view.set_character(regen_entry)) {
+                std::cerr << "smoke: cancel-regenerate set_character failed\n";
+                return 1;
+            }
+            regen_view.on_regenerate();
+            if (!regen_view.is_streaming()) {
+                std::cerr << "smoke: regenerate did not start streaming\n";
+                return 1;
+            }
+
+            bool regen_draft_seen = false;
+            const gint64 regen_wait = g_get_monotonic_time() + 1000 * 1000;
+            while (g_get_monotonic_time() < regen_wait) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                try {
+                    const std::optional<st::ChatDraft> draft =
+                        chats.load_draft("regen-bot", "regen.jsonl");
+                    if (draft.has_value() &&
+                        draft->text.find("partial") != std::string::npos) {
+                        regen_draft_seen = true;
+                        break;
+                    }
+                } catch (const std::exception&) {
+                }
+                g_usleep(5000);
+            }
+            if (!regen_draft_seen) {
+                std::cerr << "smoke: regenerate draft missing\n";
+                return 1;
+            }
+            // Drop the draft so the reload does not re-recover it; the
+            // assertion below targets the stop_streaming save alone.
+            chats.clear_draft("regen-bot", "regen.jsonl");
+            regen_view.set_character(regen_entry);
+
+            const st::Chat regen_saved = chats.load("regen-bot", "regen.jsonl");
+            if (regen_saved.messages.size() != std::size_t(3)) {
+                std::cerr << "smoke: cancel during regenerate message count mismatch\n";
+                return 1;
+            }
+            const std::size_t regen_last = regen_saved.messages.size() - 1;
+            st::ChatSession regen_session(regen_entry.card,
+                                          settings,
+                                          chats,
+                                          "regen-bot",
+                                          "regen.jsonl",
+                                          regen_saved);
+            if (regen_session.swipe_count(regen_last) != 2 ||
+                regen_session.swipe_index(regen_last) != 1 ||
+                regen_session.chat().messages[regen_last].mes != "partial" ||
+                !regen_session.select_swipe(regen_last, 0) ||
+                regen_session.chat().messages[regen_last].mes != "original") {
+                std::cerr << "smoke: cancel during regenerate lost the original reply\n";
+                return 1;
+            }
+            std::cout << "smoke: cancel during regenerate\n";
         }
 
         {

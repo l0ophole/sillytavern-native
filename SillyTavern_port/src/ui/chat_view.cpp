@@ -935,6 +935,15 @@ void ChatView::stop_streaming() {
             try {
                 if (continue_mode_) {
                     session_->append_to_last_assistant(partial);
+                } else if (regenerate_backup_.has_value()) {
+                    // Mirror finish_generation: a cancelled regenerate
+                    // preserves the popped original as a swipe and keeps
+                    // the partial as the newest swipe, rather than
+                    // discarding the original.
+                    session_->restore(*regenerate_backup_);
+                    if (!session_->chat().messages.empty()) {
+                        session_->add_swipe(session_->chat().messages.size() - 1, partial);
+                    }
                 } else {
                     session_->append_assistant(partial);
                 }
