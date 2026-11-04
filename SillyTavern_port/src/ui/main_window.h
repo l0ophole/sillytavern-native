@@ -24,8 +24,10 @@ public:
 
     std::string create_backup();
     bool restore_backup(const std::string& id);
+    bool backup_actions_enabled() const;
 
 private:
+    void refresh_backup_menu();
     void on_settings();
     void on_character_selected(const st::CharacterEntry& entry);
     void on_backup();

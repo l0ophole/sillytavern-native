@@ -37,6 +37,7 @@ MainWindow::MainWindow(st::Paths paths,
     chat_view_ = std::make_unique<ChatView>(
         chats_, settings_, [this](const std::string& text) {
             status_.set_text(st::redact_secrets(text, {settings_.api_key}));
+            refresh_backup_menu();
         });
     character_list_ = std::make_unique<CharacterList>(
         *this,
@@ -107,7 +108,17 @@ void MainWindow::on_settings() {
     }
 }
 
+void MainWindow::refresh_backup_menu() {
+    const bool enabled = !chat_view_->is_streaming();
+    backup_item_.set_sensitive(enabled);
+    restore_item_.set_sensitive(enabled);
+}
+
 std::string MainWindow::create_backup() {
+    if (chat_view_->is_streaming()) {
+        status_.set_text("Backup error: generation in progress");
+        return {};
+    }
     try {
         st::BackupManager manager(paths_.chats_dir);
         const std::string id = manager.create();
@@ -121,7 +132,15 @@ std::string MainWindow::create_backup() {
     }
 }
 
+bool MainWindow::backup_actions_enabled() const {
+    return backup_item_.get_sensitive() && restore_item_.get_sensitive();
+}
+
 bool MainWindow::restore_backup(const std::string& id) {
+    if (chat_view_->is_streaming()) {
+        status_.set_text("Backup error: generation in progress");
+        return false;
+    }
     try {
         st::BackupManager manager(paths_.chats_dir);
         manager.restore(id);
@@ -142,6 +161,10 @@ void MainWindow::on_backup() {
 }
 
 void MainWindow::on_restore() {
+    if (chat_view_->is_streaming()) {
+        status_.set_text("Backup error: generation in progress");
+        return;
+    }
     std::vector<st::BackupEntry> entries;
     try {
         st::BackupManager manager(paths_.chats_dir);

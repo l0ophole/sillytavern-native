@@ -142,3 +142,13 @@ if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: autosave journal' <<<"$ou
     echo "smoke test failed: autosave journal failed" >&2
     exit 1
 fi
+
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: cancel during regenerate' <<<"$output"; then
+    echo "smoke test failed: cancel during regenerate failed" >&2
+    exit 1
+fi
+
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: backup guard while streaming' <<<"$output"; then
+    echo "smoke test failed: backup guard while streaming failed" >&2
+    exit 1
+fi

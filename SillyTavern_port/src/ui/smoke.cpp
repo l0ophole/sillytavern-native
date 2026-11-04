@@ -171,6 +171,23 @@ std::string transcript_text(Gtk::Container& container) {
     return {};
 }
 
+// Finds the first widget of the requested type under the given widget,
+// recursing into nested containers.
+template <typename T>
+T* find_widget(Gtk::Widget& widget) {
+    if (auto* found = dynamic_cast<T*>(&widget)) {
+        return found;
+    }
+    if (auto* container = dynamic_cast<Gtk::Container*>(&widget)) {
+        for (Gtk::Widget* child : container->get_children()) {
+            if (T* nested = find_widget<T>(*child)) {
+                return nested;
+            }
+        }
+    }
+    return nullptr;
+}
+
 bool selector_has_file(Gtk::Container& container, const std::string& filename) {
     for (Gtk::Widget* child : container.get_children()) {
         if (auto* combo = dynamic_cast<Gtk::ComboBoxText*>(child)) {
@@ -820,6 +837,61 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: cancel during regenerate\n";
+
+            // Backup/Restore stay disabled while a generation streams, so
+            // a restore cannot clobber the just-restored files.
+            {
+                st::Settings guard_settings = settings;
+                guard_settings.api_base_url = std::string(mock_base) + "/slow-partial";
+                guard_settings.model = "mock";
+                guard_settings.stream = true;
+                MainWindow guard_window(paths, guard_settings, characters, chats);
+                guard_window.show_all();
+
+                auto* guard_list = find_widget<CharacterList>(guard_window);
+                auto* guard_view = find_widget<ChatView>(guard_window);
+                if (guard_list == nullptr || guard_view == nullptr) {
+                    std::cerr << "smoke: backup guard widgets missing\n";
+                    return 1;
+                }
+                const gint64 guard_scan_deadline =
+                    g_get_monotonic_time() + 5 * 1000 * 1000;
+                while ((guard_list->is_scanning() || guard_list->visible_entries().empty()) &&
+                       g_get_monotonic_time() < guard_scan_deadline) {
+                    while (Glib::MainContext::get_default()->iteration(false)) {
+                    }
+                    g_usleep(1000);
+                }
+                guard_list->select_id(entry.id);
+                const gint64 guard_load_deadline =
+                    g_get_monotonic_time() + 5 * 1000 * 1000;
+                while (guard_view->current_filename().empty() &&
+                       g_get_monotonic_time() < guard_load_deadline) {
+                    while (Glib::MainContext::get_default()->iteration(false)) {
+                    }
+                    g_usleep(1000);
+                }
+                if (guard_view->current_filename().empty()) {
+                    std::cerr << "smoke: backup guard character load failed\n";
+                    return 1;
+                }
+                if (!guard_view->submit_message("Hi")) {
+                    std::cerr << "smoke: backup guard submit failed\n";
+                    return 1;
+                }
+                if (!guard_view->is_streaming() ||
+                    guard_window.backup_actions_enabled()) {
+                    std::cerr << "smoke: backup actions not disabled while streaming\n";
+                    return 1;
+                }
+                guard_view->clear();
+                if (guard_view->is_streaming() ||
+                    !guard_window.backup_actions_enabled()) {
+                    std::cerr << "smoke: backup actions not re-enabled after streaming\n";
+                    return 1;
+                }
+                std::cout << "smoke: backup guard while streaming\n";
+            }
         }
 
         {
