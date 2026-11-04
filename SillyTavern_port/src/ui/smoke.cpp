@@ -152,6 +152,25 @@ std::string make_smoke_png(const std::string& name = "Smoke Test") {
     return png;
 }
 
+// Returns the plain text of the (non-editable) transcript TextView found
+// under the given container, recursing into nested containers.
+std::string transcript_text(Gtk::Container& container) {
+    for (Gtk::Widget* child : container.get_children()) {
+        if (auto* view = dynamic_cast<Gtk::TextView*>(child)) {
+            if (!view->get_editable()) {
+                return view->get_buffer()->get_text();
+            }
+        }
+        if (auto* nested = dynamic_cast<Gtk::Container*>(child)) {
+            std::string found = transcript_text(*nested);
+            if (!found.empty()) {
+                return found;
+            }
+        }
+    }
+    return {};
+}
+
 }  // namespace
 
 int run_smoke_test() {
@@ -825,6 +844,36 @@ int run_smoke_test() {
                 }
             }
             std::cout << "smoke: authors note\n";
+        }
+
+        {
+            st::CharacterEntry md_entry;
+            md_entry.id = "md-bot";
+            md_entry.card.name = "MdBot";
+            md_entry.card.first_mes = "Hi.";
+
+            st::Chat md_chat = chats.create(
+                "md-bot", st::normalize_user_name(settings.user_name), "Hi.");
+            st::ChatMessage md_assistant;
+            md_assistant.name = "MdBot";
+            md_assistant.send_date = "2026-11-01T00:00:02Z";
+            md_assistant.mes = "**bold** and <tag>";
+            md_chat.messages.push_back(md_assistant);
+            chats.save("md-bot", "md.jsonl", md_chat);
+
+            ChatView md_view(chats, settings, [](const std::string&) {});
+            md_view.show_all();
+            if (!md_view.set_character(md_entry)) {
+                std::cerr << "smoke: markdown render failed\n";
+                return 1;
+            }
+            const std::string rendered = transcript_text(md_view);
+            if (rendered.find("bold and <tag>") == std::string::npos ||
+                rendered.find("**") != std::string::npos) {
+                std::cerr << "smoke: markdown render mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: markdown render\n";
         }
 
         window.hide();

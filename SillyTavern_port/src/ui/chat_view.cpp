@@ -2,6 +2,7 @@
 
 #include "core/identity.h"
 #include "core/log.h"
+#include "core/markdown.h"
 #include "core/names.h"
 #include "core/prompt.h"
 
@@ -36,6 +37,35 @@ std::string utc_now() {
     char buffer[32] = {};
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
     return buffer;
+}
+
+// Escapes plain text for insertion as Pango markup, so user/system text
+// renders literally and can never inject tags or break Pango parsing.
+// Mirrors the escaping guarantees of st::markdown_to_pango.
+std::string escape_markup_text(const std::string& text) {
+    std::string out;
+    out.reserve(text.size());
+    for (const char c : text) {
+        const unsigned char byte = static_cast<unsigned char>(c);
+        if (byte < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+            continue;
+        }
+        switch (c) {
+            case '&':
+                out += "&amp;";
+                break;
+            case '<':
+                out += "&lt;";
+                break;
+            case '>':
+                out += "&gt;";
+                break;
+            default:
+                out += c;
+                break;
+        }
+    }
+    return out;
 }
 
 }  // namespace
@@ -1194,8 +1224,12 @@ void ChatView::refresh_transcript() {
         const char* label = message.is_system ? "System:" : (message.is_user ? "User:" : "Character:");
         const std::size_t begin = static_cast<std::size_t>(buffer->get_char_count());
         buffer->insert_with_tag(buffer->end(), Glib::ustring(label) + "\n", header_tag_);
-        buffer->insert(buffer->end(),
-                       Glib::ustring(expand_macros(message.mes, character_name_, user)) + "\n\n");
+        const std::string expanded = expand_macros(message.mes, character_name_, user);
+        if (message.is_user || message.is_system) {
+            buffer->insert_markup(buffer->end(), Glib::ustring(escape_markup_text(expanded)) + "\n\n");
+        } else {
+            buffer->insert_markup(buffer->end(), Glib::ustring(markdown_to_pango(expanded)) + "\n\n");
+        }
         const std::size_t end = static_cast<std::size_t>(buffer->get_char_count());
         message_ranges_.push_back(MessageRange{begin, end});
     }
@@ -1248,8 +1282,9 @@ void ChatView::append_streaming_display() {
     Glib::RefPtr<Gtk::TextBuffer> buffer = transcript_view_.get_buffer();
     const std::string user = normalize_user_name(settings_.user_name);
     buffer->insert_with_tag(buffer->end(), "Character:\n", header_tag_);
-    buffer->insert(buffer->end(),
-                   Glib::ustring(expand_macros(streaming_text_, character_name_, user)) + "\n\n");
+    buffer->insert_markup(buffer->end(),
+                          Glib::ustring(markdown_to_pango(
+                              expand_macros(streaming_text_, character_name_, user))) + "\n\n");
     scroll_to_end();
 }
 
