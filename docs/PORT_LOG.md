@@ -35,6 +35,11 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | P08 GTK application shell and navigation | 05-stage-4-gtk-ui.md | yes | yes | afd7c8b | GTK3 window, paned layout, header/settings dialog, startup error handling, status bar, Xvfb smoke harness |
 | P09 Single-instance and data locking | 08-v0.1.1-reliability.md | yes | yes | 45f8801 | Advisory `flock` instance lock with holder PID plus per-chat write locks; second writer fails cleanly |
 | P10 Crash recovery and autosave journal | 08-v0.1.1-reliability.md | yes | yes | 730bd8a | Atomic per-chunk draft journal under `.journal`, base-message staleness check, recovery on chat load |
+| C07 Swipes and alternate responses | 10-v0.2-chat-depth.md | yes | yes | a9cace7, c5d78e1 | `swipes`/`swipe_id` in message `extra`, `mes == swipes[swipe_id]`, regenerate adds a swipe, swipe navigation in the transcript |
+| C08 Branching and bookmarks | 10-v0.2-chat-depth.md | yes | yes | 23a8650 | Branch copies messages `[0..index]` into `<stem> - branch <n>.jsonl` without mutating the source; bookmarks in chat metadata |
+| C14 Author's note | 10-v0.2-chat-depth.md | yes | yes | 5a433ba, fd3c9d5 | Settings fields (enabled/note/depth 0..100, 4096-byte cap), `insert_at_depth` prompt injection, settings-dialog controls |
+| C17 Markdown and rich formatting | 10-v0.2-chat-depth.md | yes | yes | e5bf40b, 76955a9 | GTK-free `markdown_to_pango` safe subset with full HTML escaping; assistant messages render via `insert_markup` |
+| C11 Chat backups | 10-v0.2-chat-depth.md | yes | yes | 1808242, 702511e, 415db27 | `BackupManager` under `chats/.backups/`, 512 MiB cap, 10 kept, all-or-nothing restore, menu backup/restore UI |
 
 ## v0.1 completion
 
@@ -88,6 +93,39 @@ feature registry is unchanged (105 features, 21 ported, 84 planned; targets
   malformed drafts.
 - Warning-free build assertion (this release): `tests/verify_v01.sh` fails
   when the build log contains any `warning:` line.
+
+## v0.2.0 completion
+
+v0.2.0 adds chat depth: swipes, branching and bookmarks, author's note,
+Markdown, and chat backups. The feature registry moves to 105 features,
+26 ported, 79 planned, with target sets 19 `0.1`, 2 `0.1.1`, and 5 `0.2`.
+
+- C07 Swipes and alternate responses (`a9cace7`, `c5d78e1`): core swipe
+  model in `ChatSession`, swipe navigation and regenerate-as-swipe in
+  `ChatView`, recovered `replace_last` drafts become two swipes.
+- C08 Branching and bookmarks (`23a8650`): `ChatSession::branch` plus
+  bookmark helpers, `ChatView::branch_from`, context-menu items.
+- C14 Author's note (`5a433ba`, `fd3c9d5`): settings fields and
+  `insert_at_depth` prompt injection, settings-dialog controls.
+- C17 Markdown and rich formatting (`e5bf40b`, `76955a9`): GTK-free
+  `markdown_to_pango` with full HTML escaping, transcript rendering via
+  `insert_markup` for assistant messages.
+- C11 Chat backups (`1808242`, `702511e`, `415db27`): `BackupManager`
+  under `chats/.backups/` with a 512 MiB tree cap and 10 kept,
+  all-or-nothing restore, application-menu backup/restore UI.
+
+Chat files remain SillyTavern-compatible JSONL; files written by this
+version load in SillyTavern for the fields this milestone writes, and
+SillyTavern-authored chats still load here.
+
+Gate evidence: `tests/verify_v01.sh` passes with
+`v0.2.0 verification: PASS` (sanitizer tests, warning-free clean build,
+unit tests, integration tests, 20 smoke markers, menuconfig selftest,
+the 105/26/79/19+2+5 feature counts with the C07/C08/C11/C14/C17
+membership check, the `0.2.0` version string, the GTK-free core, and a
+clean upstream tree). `tests/alpine_build.sh` repeats build, unit,
+integration, and smoke checks on Alpine 3.20 (musl), printing
+`build ok`, `tests ok`, `integration ok`, and `smoke ok`.
 
 ## Known v0.1.1 limitations
 

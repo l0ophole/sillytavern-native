@@ -41,6 +41,32 @@ single-user core-chat MVP; the full feature set is tracked in
 - Warning assertion: the host verification gate fails if the build log
   contains any `warning:` line, keeping the build warning-free.
 
+## v0.2.0 scope
+
+- Swipes: keep multiple candidate assistant replies per message in
+  SillyTavern-compatible `swipes`/`swipe_id` fields; regenerate adds a
+  swipe instead of discarding the previous reply, and recovered
+  `replace_last` drafts become two swipes.
+- Branching and bookmarks: fork a chat from any message into
+  `<stem> - branch <n>.jsonl` without mutating the source, and mark
+  bookmarked positions in chat metadata for quick jumps.
+- Author's note: inject an author's note at a configurable depth
+  (0..100, default 4) into the prompt when enabled and non-empty,
+  configured in the settings dialog.
+- Markdown: assistant replies render as a safe Markdown subset
+  (bold, italic, strike, inline/fenced code, headings, blockquotes,
+  lists, links) with all HTML escaped; user and system messages
+  render as escaped plain text.
+- Backups: manual timestamped chat backups under `chats/.backups/`
+  with restore from the application menu; one backup tree is capped
+  at 512 MiB and the 10 newest backups are kept.
+
+Chat files stay SillyTavern-compatible JSONL: one metadata object,
+then one object per message, with unknown fields preserved. Files
+written by this version load in SillyTavern for the fields this
+milestone writes (`swipes`/`swipe_id`, bookmarks, and the author's
+note settings), and SillyTavern-authored chats load here.
+
 Startup scans and chat loads run on background workers. Explicit import/delete
 and new-chat writes remain synchronous on the GTK thread and are size-capped:
 1 MiB for `settings.json`, 64 MiB for character cards and chat logs, and 16 MiB

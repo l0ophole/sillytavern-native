@@ -18,7 +18,7 @@ dependency edge is listed in both directions.
 | Critical features | 19 |
 | v0.1 target features | 19 |
 | v0.1.1 target features | 2 |
-| Ported features | 21 |
+| Ported features | 26 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -132,17 +132,17 @@ feature IDs; names are in the same table.
 | C04 | OpenAI-compatible streaming generation | **yes** | v0.1 | ported | P07, C03, C39 | B07, C05, C12, C13, C18, C19, C20, C26, C36, C37, C38, U07 |
 | C05 | Message actions | **yes** | v0.1 | ported | C01, C02, C04 | C07 |
 | C06 | Context budgeting and trimming | **yes** | v0.1 | ported | C03, P05 | C33 |
-| C07 | Swipes and alternate responses | no | later | planned | C05 | — |
-| C08 | Branching and bookmarks | no | later | planned | C01 | — |
+| C07 | Swipes and alternate responses | no | later | ported | C05 | — |
+| C08 | Branching and bookmarks | no | later | ported | C01 | — |
 | C09 | Group chats | no | later | planned | C01, C03 | — |
 | C10 | Chat search | no | later | planned | C01 | — |
-| C11 | Chat backups | no | later | planned | C01 | U15 |
+| C11 | Chat backups | no | later | ported | C01 | U15 |
 | C12 | Auto-continue | no | later | planned | C04 | — |
 | C13 | Impersonation | no | later | planned | C03, C04 | — |
-| C14 | Author's note | no | later | planned | C03 | — |
+| C14 | Author's note | no | later | ported | C03 | — |
 | C15 | Instruct mode | no | later | planned | C03 | — |
 | C16 | Context templates | no | later | planned | C03 | — |
-| C17 | Markdown and rich formatting | no | later | planned | C02 | — |
+| C17 | Markdown and rich formatting | no | later | ported | C02 | — |
 | C18 | Reasoning display | no | later | planned | C04 | — |
 | C19 | Tool calling | no | later | planned | C04 | — |
 | C20 | Logprobs display | no | later | planned | C04 | — |

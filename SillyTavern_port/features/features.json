@@ -398,8 +398,8 @@
       "name": "Swipes and alternate responses",
       "description": "Keep multiple candidate assistant replies per message.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.2",
+      "status": "ported",
       "depends_on": [
         "C05"
       ]
@@ -410,8 +410,8 @@
       "name": "Branching and bookmarks",
       "description": "Fork conversations and mark restore points.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.2",
+      "status": "ported",
       "depends_on": [
         "C01"
       ]
@@ -447,8 +447,8 @@
       "name": "Chat backups",
       "description": "Timestamped automatic and manual chat backups with retention.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.2",
+      "status": "ported",
       "depends_on": [
         "C01"
       ]
@@ -484,8 +484,8 @@
       "name": "Author's note",
       "description": "Inject adjustable-depth author instructions into the prompt.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.2",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -520,8 +520,8 @@
       "name": "Markdown and rich formatting",
       "description": "Markdown, code blocks, emphasis, and safe HTML rendering in messages.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.2",
+      "status": "ported",
       "depends_on": [
         "C02"
       ]
