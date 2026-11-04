@@ -578,6 +578,64 @@ int run_smoke_test() {
             }
             std::cout << "smoke: ui streaming\n";
 
+            {
+                const std::string swipe_filename = mock_chats.back();
+                const std::size_t last = chats.load("mock", swipe_filename).messages.size() - 1;
+                st::ChatSession before_regen(mock_entry.card,
+                                              mock_settings,
+                                              chats,
+                                              "mock",
+                                              swipe_filename,
+                                              chats.load("mock", swipe_filename));
+                if (before_regen.swipe_count(last) != 1) {
+                    std::cerr << "smoke: swipes initial count mismatch\n";
+                    return 1;
+                }
+
+                view.on_regenerate();
+                const gint64 regen_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+                while (g_get_monotonic_time() < regen_deadline) {
+                    while (Glib::MainContext::get_default()->iteration(false)) {
+                    }
+                    if (!view.is_streaming() && ui_status != "Generating...") {
+                        break;
+                    }
+                    g_usleep(5000);
+                }
+                if (view.is_streaming()) {
+                    std::cerr << "smoke: regenerate timed out\n";
+                    return 1;
+                }
+
+                st::ChatSession after_regen(mock_entry.card,
+                                             mock_settings,
+                                             chats,
+                                             "mock",
+                                             swipe_filename,
+                                             chats.load("mock", swipe_filename));
+                if (after_regen.swipe_count(last) != 2 ||
+                    after_regen.swipe_index(last) != 1) {
+                    std::cerr << "smoke: regenerate did not add a swipe\n";
+                    return 1;
+                }
+                if (!view.swipe_current(-1)) {
+                    std::cerr << "smoke: swipe_current failed\n";
+                    return 1;
+                }
+                st::ChatSession after_swipe(mock_entry.card,
+                                             mock_settings,
+                                             chats,
+                                             "mock",
+                                             swipe_filename,
+                                             chats.load("mock", swipe_filename));
+                if (after_swipe.swipe_index(last) != 0 ||
+                    after_swipe.chat().messages[last].mes != "hello world") {
+                    std::cerr << "smoke: swipe did not restore original text\n";
+                    return 1;
+                }
+                std::cout << "smoke: swipes\n";
+            }
+
             st::Settings slow_settings = mock_settings;
             slow_settings.api_base_url = std::string(mock_base) + "/slow-partial";
 

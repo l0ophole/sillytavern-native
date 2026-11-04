@@ -458,6 +458,10 @@ TEST(chat_session_replaces_last_message_on_regenerate_recovery) {
     CHECK_EQ(session.chat().messages.back().mes, "new");
     CHECK_EQ(session.chat().messages.back().send_date, "2026-11-01T00:00:03Z");
     CHECK_EQ(session.chat().messages.front().mes, "Hi");
+    CHECK_EQ(session.swipe_count(1), 2u);
+    CHECK_EQ(session.swipe_index(1), 1u);
+    CHECK(session.select_swipe(1, 0));
+    CHECK_EQ(session.chat().messages.back().mes, "old");
 }
 
 TEST(chat_session_rejects_regenerate_draft_when_base_is_stale) {

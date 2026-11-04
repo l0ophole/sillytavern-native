@@ -108,6 +108,11 @@ if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: ui streaming' <<<"$output
     exit 1
 fi
 
+if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: swipes' <<<"$output"; then
+    echo "smoke test failed: swipes failed" >&2
+    exit 1
+fi
+
 if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: partial on switch' <<<"$output"; then
     echo "smoke test failed: partial on switch failed" >&2
     exit 1

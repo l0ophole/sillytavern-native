@@ -41,6 +41,8 @@ public:
     const std::string& current_filename() const { return filename_; }
     bool is_streaming() const { return streaming_; }
     bool is_loading() const { return loading_; }
+    void on_regenerate();
+    bool swipe_current(int delta);
 
 private:
     struct ChatLoadResult {
@@ -72,7 +74,6 @@ private:
 
     void on_edit_message();
     void on_delete_message();
-    void on_regenerate();
     void on_continue();
 
     bool start_generation(st::OpenAiRequest request, bool continue_mode = false);
@@ -119,6 +120,8 @@ private:
     Gtk::MenuItem delete_item_;
     Gtk::MenuItem regenerate_item_;
     Gtk::MenuItem continue_item_;
+    Gtk::MenuItem swipe_prev_item_;
+    Gtk::MenuItem swipe_next_item_;
     struct MessageRange {
         std::size_t begin = 0;
         std::size_t end = 0;

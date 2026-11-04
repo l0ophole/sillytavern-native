@@ -93,10 +93,14 @@ ChatView::ChatView(st::ChatStore& chats,
     delete_item_.set_label("Delete");
     regenerate_item_.set_label("Regenerate");
     continue_item_.set_label("Continue");
+    swipe_prev_item_.set_label("< Previous swipe");
+    swipe_next_item_.set_label("Next swipe >");
     context_menu_.append(edit_item_);
     context_menu_.append(delete_item_);
     context_menu_.append(regenerate_item_);
     context_menu_.append(continue_item_);
+    context_menu_.append(swipe_prev_item_);
+    context_menu_.append(swipe_next_item_);
     context_menu_.attach_to_widget(transcript_view_);
     edit_item_.signal_activate().connect(
         sigc::mem_fun(*this, &ChatView::on_edit_message));
@@ -106,6 +110,8 @@ ChatView::ChatView(st::ChatStore& chats,
         sigc::mem_fun(*this, &ChatView::on_regenerate));
     continue_item_.signal_activate().connect(
         sigc::mem_fun(*this, &ChatView::on_continue));
+    swipe_prev_item_.signal_activate().connect([this]() { swipe_current(-1); });
+    swipe_next_item_.signal_activate().connect([this]() { swipe_current(1); });
     context_menu_.show_all();
 
     composer_view_.set_wrap_mode(Gtk::WRAP_WORD_CHAR);
@@ -454,6 +460,7 @@ bool ChatView::on_transcript_button_press(GdkEventButton* event) {
 
     regenerate_item_.set_sensitive(session_->can_regenerate_at(context_index_));
     continue_item_.set_sensitive(session_->can_continue_at(context_index_));
+    update_controls();
     context_menu_.popup_at_pointer(reinterpret_cast<const GdkEvent*>(event));
     return true;
 }
@@ -583,6 +590,42 @@ void ChatView::on_continue() {
     start_generation(std::move(request), true);
 }
 
+bool ChatView::swipe_current(int delta) {
+    if (!session_ || streaming_ || loading_ || delta == 0 ||
+        session_->chat().messages.empty()) {
+        return false;
+    }
+    const std::size_t last_index = session_->chat().messages.size() - 1;
+    const std::size_t count = session_->swipe_count(last_index);
+    if (count <= 1) {
+        return false;
+    }
+    const std::size_t current = session_->swipe_index(last_index);
+    const long long target = static_cast<long long>(current) + delta;
+    if (target < 0 || static_cast<unsigned long long>(target) >= count) {
+        return false;
+    }
+    const st::Chat before = session_->snapshot();
+    try {
+        if (!session_->select_swipe(last_index, static_cast<std::size_t>(target))) {
+            return false;
+        }
+        session_->save();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("swipe save failed: ") + error.what());
+        session_->restore(before);
+        refresh_transcript();
+        set_status(std::string("Save error: ") + error.what());
+        return false;
+    }
+    refresh_transcript();
+    update_budget_label();
+    update_controls();
+    set_status("Swipe " + std::to_string(static_cast<std::size_t>(target) + 1) + "/" +
+               std::to_string(count));
+    return true;
+}
+
 bool ChatView::start_generation(st::OpenAiRequest request, bool continue_mode) {
     streaming_ = true;
     continue_mode_ = continue_mode;
@@ -641,6 +684,11 @@ void ChatView::finish_generation(const st::OpenAiResult& result) {
             try {
                 if (continue_mode_) {
                     session_->append_to_last_assistant(text);
+                } else if (regenerate_backup_.has_value()) {
+                    session_->restore(*regenerate_backup_);
+                    if (!session_->chat().messages.empty()) {
+                        session_->add_swipe(session_->chat().messages.size() - 1, text);
+                    }
                 } else {
                     session_->append_assistant(text);
                 }
@@ -1057,6 +1105,18 @@ void ChatView::update_controls() {
     new_button_.set_sensitive(has_character && !busy);
     rename_button_.set_sensitive(has_session && !busy && !filename_.empty());
     delete_button_.set_sensitive(has_session && !busy && !filename_.empty());
+
+    bool can_prev_swipe = false;
+    bool can_next_swipe = false;
+    if (has_session && !busy && !session_->chat().messages.empty()) {
+        const std::size_t last_index = session_->chat().messages.size() - 1;
+        const std::size_t count = session_->swipe_count(last_index);
+        const std::size_t index = session_->swipe_index(last_index);
+        can_prev_swipe = count > 1 && index > 0;
+        can_next_swipe = count > 1 && index + 1 < count;
+    }
+    swipe_prev_item_.set_sensitive(can_prev_swipe);
+    swipe_next_item_.set_sensitive(can_next_swipe);
 }
 
 void ChatView::append_streaming_display() {
