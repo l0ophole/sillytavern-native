@@ -7,6 +7,7 @@
 #include "core/json.h"
 #include "ui/avatar.h"
 #include "ui/main_window.h"
+#include "ui/settings_dialog.h"
 
 #include <glib.h>
 #include <glibmm/main.h>
@@ -795,6 +796,35 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: branch\n";
+        }
+
+        {
+            st::Settings dialog_settings = settings;
+            bool saved = false;
+            {
+                SettingsDialog dialog(window, paths, dialog_settings, [&saved]() { saved = true; });
+                dialog.show_all();
+                dialog.authors_note_enabled_widget().set_active(true);
+                dialog.authors_note_widget().get_buffer()->set_text("Stay in character.");
+                dialog.authors_note_depth_widget().set_value(1);
+                dialog.response(Gtk::RESPONSE_OK);
+            }
+            if (!saved || !dialog_settings.authors_note_enabled ||
+                dialog_settings.authors_note != "Stay in character." ||
+                dialog_settings.authors_note_depth != 1) {
+                std::cerr << "smoke: authors note save failed\n";
+                return 1;
+            }
+            {
+                SettingsDialog reopened(window, paths, dialog_settings, []() {});
+                if (!reopened.authors_note_enabled_widget().get_active() ||
+                    reopened.authors_note_widget().get_buffer()->get_text() != "Stay in character." ||
+                    reopened.authors_note_depth_widget().get_value_as_int() != 1) {
+                    std::cerr << "smoke: authors note round-trip failed\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: authors note\n";
         }
 
         window.hide();

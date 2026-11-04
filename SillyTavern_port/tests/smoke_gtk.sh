@@ -108,6 +108,11 @@ if ! grep -q 'smoke: branch' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: authors note' <<<"$output"; then
+    echo "smoke test failed: authors note failed" >&2
+    exit 1
+fi
+
 if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: ui streaming' <<<"$output"; then
     echo "smoke test failed: UI streaming failed" >&2
     exit 1

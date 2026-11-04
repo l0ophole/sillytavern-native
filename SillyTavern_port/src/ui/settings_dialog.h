@@ -17,6 +17,10 @@ public:
                    st::Settings& settings,
                    std::function<void()> on_saved);
 
+    Gtk::CheckButton& authors_note_enabled_widget() { return authors_note_enabled_; }
+    Gtk::TextView& authors_note_widget() { return authors_note_; }
+    Gtk::SpinButton& authors_note_depth_widget() { return authors_note_depth_; }
+
 private:
     void load();
     st::Settings build_settings() const;
@@ -39,6 +43,10 @@ private:
     Gtk::ScrolledWindow prompt_scroll_;
     Gtk::CheckButton stream_;
     Gtk::SpinButton timeout_;
+    Gtk::CheckButton authors_note_enabled_;
+    Gtk::TextView authors_note_;
+    Gtk::ScrolledWindow authors_note_scroll_;
+    Gtk::SpinButton authors_note_depth_;
 };
 
 }  // namespace ui
