@@ -173,6 +173,49 @@ TEST(instruct_unknown_format_clamps_to_plain) {
     CHECK_EQ(settings.context_template.size(), std::size_t(8192));
 }
 
+TEST(settings_regex_and_variables_round_trip) {
+    TempDir temp;
+    const auto file = temp.path() / "settings.json";
+    auto settings = st::Settings::load(file);
+    settings.top_k = 40;
+    settings.repetition_penalty = 1.1;
+    settings.presence_penalty = 0.5;
+    settings.frequency_penalty = -0.5;
+    settings.dry_multiplier = 0.8;
+    settings.mirostat_tau = 6.0;
+    settings.regex_rules = st::Json::array({st::Json{{"pattern", "foo"},
+                                                     {"replacement", "bar"},
+                                                     {"applies_to_user", true},
+                                                     {"applies_to_assistant", false}}});
+    settings.variables = {{"mood", "calm"}};
+    settings.save(file);
+    const auto loaded = st::Settings::load(file);
+    CHECK_EQ(loaded.top_k, 40);
+    CHECK_EQ(loaded.repetition_penalty, 1.1);
+    CHECK_EQ(loaded.presence_penalty, 0.5);
+    CHECK_EQ(loaded.frequency_penalty, -0.5);
+    CHECK_EQ(loaded.dry_multiplier, 0.8);
+    CHECK_EQ(loaded.mirostat_tau, 6.0);
+    CHECK_EQ(loaded.regex_rules.dump(), settings.regex_rules.dump());
+    CHECK_EQ(loaded.variables.size(), std::size_t(1));
+    CHECK_EQ(loaded.variables.at("mood"), "calm");
+
+    st::Settings clamped;
+    clamped.top_k = 5000;
+    clamped.repetition_penalty = 99.0;
+    clamped.presence_penalty = 99.0;
+    clamped.frequency_penalty = -99.0;
+    clamped.dry_multiplier = 99.0;
+    clamped.mirostat_tau = 99.0;
+    clamped.validate();
+    CHECK_EQ(clamped.top_k, 1000);
+    CHECK_EQ(clamped.repetition_penalty, 2.0);
+    CHECK_EQ(clamped.presence_penalty, 2.0);
+    CHECK_EQ(clamped.frequency_penalty, -2.0);
+    CHECK_EQ(clamped.dry_multiplier, 10.0);
+    CHECK_EQ(clamped.mirostat_tau, 20.0);
+}
+
 TEST(settings_persona_name_round_trips_and_truncates) {
     TempDir temp;
     const auto file = temp.path() / "settings.json";

@@ -336,6 +336,59 @@ TEST(context_template_replaces_leading) {
     CHECK_EQ(empty_parts.leading_system[0].content, "Character prompt.");
 }
 
+TEST(regex_rewrites_history) {
+    CHECK_EQ(st::apply_regex("foo foo", {st::RegexRule{"foo", "bar", true, true}}), "bar bar");
+
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.regex_rules = st::Json::array({st::Json{{"pattern", "foo"},
+                                                     {"replacement", "bar"},
+                                                     {"applies_to_user", false},
+                                                     {"applies_to_assistant", true}}});
+    st::ChatMessage user;
+    user.name = "Alice";
+    user.is_user = true;
+    user.mes = "foo";
+    st::ChatMessage bot;
+    bot.name = "Seraphina";
+    bot.mes = "foo";
+    const auto parts = st::build_prompt_parts(card, settings, {user, bot});
+    CHECK_EQ(parts.history.size(), std::size_t(2));
+    CHECK_EQ(parts.history[0].content, "foo");
+    CHECK_EQ(parts.history[1].content, "bar");
+}
+
+TEST(regex_malformed_skipped) {
+    CHECK_EQ(st::apply_regex("foo", {st::RegexRule{"[unclosed", "bar", true, true}}), "foo");
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.regex_rules = st::Json::array(
+        {st::Json{{"pattern", "[unclosed"}, {"replacement", "bar"}}, st::Json{{"pattern", 42}}});
+    st::ChatMessage bot;
+    bot.name = "Seraphina";
+    bot.mes = "foo";
+    const auto parts = st::build_prompt_parts(card, settings, {bot});
+    CHECK_EQ(parts.history.size(), std::size_t(1));
+    CHECK_EQ(parts.history[0].content, "foo");
+}
+
+TEST(variables_expand) {
+    const std::map<std::string, std::string> variables = {{"mood", "calm"}};
+    CHECK_EQ(st::expand_macros("mood is {{var:mood}} for {{char}}", "Seraphina", "Alice", variables),
+             "mood is calm for Seraphina");
+}
+
+TEST(variables_unknown_literal) {
+    const std::map<std::string, std::string> variables = {{"mood", "calm"}};
+    CHECK_EQ(st::expand_macros("{{var:missing}} and {{var:mood}}", "S", "A", variables),
+             "{{var:missing}} and calm");
+    CHECK_EQ(st::expand_macros("{{var:bad-name}}", "S", "A", variables), "{{var:bad-name}}");
+}
+
 TEST(prompt_world_info_absent_when_disabled) {
     st::CharacterCard card;
     card.name = "Seraphina";

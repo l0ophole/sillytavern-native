@@ -3,6 +3,7 @@
 #include "core/json.h"
 
 #include <filesystem>
+#include <map>
 #include <string>
 
 namespace st {
@@ -32,6 +33,14 @@ struct Settings {
     bool world_info_enabled = false;
     std::string world_info_book = "lorebook";
     std::string active_preset = "default";
+    int top_k = 0;
+    double repetition_penalty = 1.0;
+    double presence_penalty = 0.0;
+    double frequency_penalty = 0.0;
+    double dry_multiplier = 0.0;
+    double mirostat_tau = 5.0;
+    Json regex_rules = Json::array();
+    std::map<std::string, std::string> variables;
     Json unknown = Json::object();
 
     static Settings load(const std::filesystem::path& path);

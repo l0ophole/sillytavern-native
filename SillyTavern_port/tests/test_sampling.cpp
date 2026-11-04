@@ -69,6 +69,48 @@ TEST(sampling_json_has_request_fields) {
     CHECK_EQ(value["stream"].get<bool>(), true);
 }
 
+TEST(sampling_clamps_advanced) {
+    st::Sampling sampling;
+    sampling.top_k = 5000;
+    sampling.repetition_penalty = 99.0;
+    sampling.presence_penalty = 99.0;
+    sampling.frequency_penalty = -99.0;
+    sampling.dry_multiplier = 99.0;
+    sampling.mirostat_tau = 99.0;
+    const auto clamped = st::clamp_sampling(sampling);
+    CHECK_EQ(clamped.top_k, 1000);
+    CHECK_EQ(clamped.repetition_penalty, 2.0);
+    CHECK_EQ(clamped.presence_penalty, 2.0);
+    CHECK_EQ(clamped.frequency_penalty, -2.0);
+    CHECK_EQ(clamped.dry_multiplier, 10.0);
+    CHECK_EQ(clamped.mirostat_tau, 20.0);
+
+    st::Sampling non_finite;
+    non_finite.top_k = -5;
+    non_finite.repetition_penalty = std::numeric_limits<double>::quiet_NaN();
+    non_finite.presence_penalty = std::numeric_limits<double>::infinity();
+    non_finite.frequency_penalty = std::numeric_limits<double>::quiet_NaN();
+    non_finite.dry_multiplier = std::numeric_limits<double>::infinity();
+    non_finite.mirostat_tau = std::numeric_limits<double>::quiet_NaN();
+    const auto reset = st::clamp_sampling(non_finite);
+    CHECK_EQ(reset.top_k, 0);
+    CHECK_EQ(reset.repetition_penalty, 1.0);
+    CHECK_EQ(reset.presence_penalty, 0.0);
+    CHECK_EQ(reset.frequency_penalty, 0.0);
+    CHECK_EQ(reset.dry_multiplier, 0.0);
+    CHECK_EQ(reset.mirostat_tau, 5.0);
+
+    st::Sampling defaults;
+    const auto json = st::sampling_json(defaults);
+    CHECK(!json.contains("top_k"));
+    CHECK(!json.contains("repetition_penalty"));
+    defaults.top_k = 40;
+    defaults.repetition_penalty = 1.1;
+    const auto custom = st::sampling_json(defaults);
+    CHECK_EQ(custom["top_k"].get<int>(), 40);
+    CHECK_EQ(custom["repetition_penalty"].get<double>(), 1.1);
+}
+
 TEST(sampling_json_reflects_custom_values) {
     st::Sampling sampling;
     sampling.temperature = 0.25;

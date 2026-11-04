@@ -7,6 +7,7 @@
 #include "core/settings.h"
 #include "core/world_info.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,20 @@ struct PromptParts {
 std::string expand_macros(const std::string& text,
                           const std::string& character,
                           const std::string& user);
+
+std::string expand_macros(const std::string& text,
+                          const std::string& character,
+                          const std::string& user,
+                          const std::map<std::string, std::string>& variables);
+
+struct RegexRule {
+    std::string pattern;
+    std::string replacement;
+    bool applies_to_user = true;
+    bool applies_to_assistant = true;
+};
+
+std::string apply_regex(const std::string& text, const std::vector<RegexRule>& rules);
 
 std::string format_instruct_message(const std::string& role,
                                     const std::string& content,
