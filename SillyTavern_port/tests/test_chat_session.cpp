@@ -464,6 +464,49 @@ TEST(chat_session_replaces_last_message_on_regenerate_recovery) {
     CHECK_EQ(session.chat().messages.back().mes, "old");
 }
 
+TEST(chat_session_recover_draft_preserves_existing_swipes) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.send_date = "2026-11-01T00:00:01Z";
+    user.mes = "Hi";
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.is_user = false;
+    assistant.is_system = false;
+    assistant.send_date = "2026-11-01T00:00:02Z";
+    assistant.mes = "A";
+    chat.messages = {user, assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK(session.add_swipe(1, "B"));
+    CHECK_EQ(session.swipe_count(1), 2u);
+    CHECK_EQ(session.chat().messages.back().mes, "B");
+
+    st::ChatDraft draft;
+    draft.text = "C";
+    draft.send_date = "2026-11-01T00:00:03Z";
+    draft.base_messages = 1;
+    draft.replace_last = true;
+    CHECK(session.recover_draft(draft));
+    CHECK_EQ(session.chat().messages.size(), 2u);
+    CHECK_EQ(session.chat().messages.back().mes, "C");
+    CHECK_EQ(session.swipe_count(1), 3u);
+    CHECK_EQ(session.swipe_index(1), 2u);
+    CHECK(session.select_swipe(1, 0));
+    CHECK_EQ(session.chat().messages.back().mes, "A");
+    CHECK(session.select_swipe(1, 1));
+    CHECK_EQ(session.chat().messages.back().mes, "B");
+}
+
 TEST(chat_session_rejects_regenerate_draft_when_base_is_stale) {
     TempDir temp;
     st::ChatStore store(temp.path());

@@ -387,7 +387,9 @@ bool ChatSession::recover_draft(const ChatDraft& draft) {
             return false;
         }
         ChatMessage& target = chat_.messages.back();
-        write_swipes(target, {target.mes, draft.text}, 1);
+        std::vector<std::string> swipes = read_swipes(target);
+        swipes.push_back(draft.text);
+        write_swipes(target, swipes, swipes.size() - 1);
         target.mes = draft.text;
         if (!draft.send_date.empty()) {
             target.send_date = draft.send_date;
