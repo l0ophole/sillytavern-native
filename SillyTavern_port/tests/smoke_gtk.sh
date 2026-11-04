@@ -118,6 +118,11 @@ if ! grep -q 'smoke: markdown render' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: backup round trip' <<<"$output"; then
+    echo "smoke test failed: backup round trip failed" >&2
+    exit 1
+fi
+
 if [ -n "${ST_MOCK_BASE_URL:-}" ] && ! grep -q 'smoke: ui streaming' <<<"$output"; then
     echo "smoke test failed: UI streaming failed" >&2
     exit 1

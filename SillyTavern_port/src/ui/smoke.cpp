@@ -171,6 +171,29 @@ std::string transcript_text(Gtk::Container& container) {
     return {};
 }
 
+bool selector_has_file(Gtk::Container& container, const std::string& filename) {
+    for (Gtk::Widget* child : container.get_children()) {
+        if (auto* combo = dynamic_cast<Gtk::ComboBoxText*>(child)) {
+            const auto model = combo->get_model();
+            if (model) {
+                for (const auto& row : model->children()) {
+                    Glib::ustring value;
+                    row.get_value(0, value);
+                    if (value == filename) {
+                        return true;
+                    }
+                }
+            }
+        }
+        if (auto* nested = dynamic_cast<Gtk::Container*>(child)) {
+            if (selector_has_file(*nested, filename)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 int run_smoke_test() {
@@ -874,6 +897,51 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: markdown render\n";
+        }
+
+        {
+            chats.save(entry.id,
+                       "backup-target.jsonl",
+                       chats.create(entry.id,
+                                    st::normalize_user_name(settings.user_name),
+                                    entry.card.first_mes));
+            const std::string backup_id = window.create_backup();
+            if (backup_id.empty()) {
+                std::cerr << "smoke: create_backup failed\n";
+                return 1;
+            }
+            chats.remove(entry.id, "backup-target.jsonl");
+
+            ChatView check_view(chats, settings, [](const std::string&) {});
+            check_view.show_all();
+            if (!check_view.set_character(entry)) {
+                std::cerr << "smoke: backup check set_character failed\n";
+                return 1;
+            }
+            if (selector_has_file(check_view, "backup-target.jsonl")) {
+                std::cerr << "smoke: backup target should be missing\n";
+                return 1;
+            }
+            if (!window.restore_backup(backup_id)) {
+                std::cerr << "smoke: restore_backup failed\n";
+                return 1;
+            }
+            if (!check_view.set_character(entry)) {
+                std::cerr << "smoke: backup check set_character failed\n";
+                return 1;
+            }
+            const gint64 backup_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (check_view.is_loading() && g_get_monotonic_time() < backup_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (check_view.is_loading() ||
+                !selector_has_file(check_view, "backup-target.jsonl")) {
+                std::cerr << "smoke: backup round trip failed\n";
+                return 1;
+            }
+            std::cout << "smoke: backup round trip\n";
         }
 
         window.hide();

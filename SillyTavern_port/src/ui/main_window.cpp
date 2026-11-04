@@ -1,5 +1,6 @@
 #include "ui/main_window.h"
 
+#include "core/backup.h"
 #include "core/log.h"
 #include "ui/settings_dialog.h"
 
@@ -23,6 +24,14 @@ MainWindow::MainWindow(st::Paths paths,
     header_.set_show_close_button(true);
     settings_button_.set_label("Settings");
     header_.pack_end(settings_button_);
+    backup_item_.set_label("Back up chats");
+    restore_item_.set_label("Restore backup...");
+    backup_menu_.append(backup_item_);
+    backup_menu_.append(restore_item_);
+    backup_menu_.show_all();
+    menu_button_.set_label("Backup");
+    menu_button_.set_popup(backup_menu_);
+    header_.pack_end(menu_button_);
     set_titlebar(header_);
 
     chat_view_ = std::make_unique<ChatView>(
@@ -67,6 +76,8 @@ MainWindow::MainWindow(st::Paths paths,
 
     settings_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_settings));
+    backup_item_.signal_activate().connect(sigc::mem_fun(*this, &MainWindow::on_backup));
+    restore_item_.signal_activate().connect(sigc::mem_fun(*this, &MainWindow::on_restore));
 
     chat_view_->clear();
     status_.set_text("Loading characters...");
@@ -94,6 +105,108 @@ void MainWindow::on_settings() {
         status_.set_text(
             st::redact_secrets(std::string("Settings error: ") + error.what(), {settings_.api_key}));
     }
+}
+
+std::string MainWindow::create_backup() {
+    try {
+        st::BackupManager manager(paths_.chats_dir);
+        const std::string id = manager.create();
+        status_.set_text(st::redact_secrets("Backup created: " + id, {settings_.api_key}));
+        return id;
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("backup failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("Backup error: ") + error.what(), {settings_.api_key}));
+        return {};
+    }
+}
+
+bool MainWindow::restore_backup(const std::string& id) {
+    try {
+        st::BackupManager manager(paths_.chats_dir);
+        manager.restore(id);
+        character_list_->refresh();
+        chat_view_->clear();
+        status_.set_text(st::redact_secrets("Backup restored: " + id, {settings_.api_key}));
+        return true;
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("backup restore failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("Backup error: ") + error.what(), {settings_.api_key}));
+        return false;
+    }
+}
+
+void MainWindow::on_backup() {
+    (void)create_backup();
+}
+
+void MainWindow::on_restore() {
+    std::vector<st::BackupEntry> entries;
+    try {
+        st::BackupManager manager(paths_.chats_dir);
+        entries = manager.list();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("backup list failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("Backup error: ") + error.what(), {settings_.api_key}));
+        return;
+    }
+    if (entries.empty()) {
+        status_.set_text("Backup error: no backups");
+        return;
+    }
+
+    Gtk::Dialog dialog("Restore backup", true);
+    dialog.set_transient_for(*this);
+    dialog.set_default_size(480, 320);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Restore", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+
+    auto* list = Gtk::manage(new Gtk::ListBox());
+    list->set_selection_mode(Gtk::SELECTION_SINGLE);
+    for (const auto& entry : entries) {
+        auto* row = Gtk::manage(new Gtk::ListBoxRow());
+        auto* label = Gtk::manage(new Gtk::Label(
+            entry.id + " (" + entry.created + ", " + std::to_string(entry.chats) + " chats)"));
+        row->add(*label);
+        list->append(*row);
+    }
+    list->select_row(*list->get_row_at_index(0));
+    auto* scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    scroll->add(*list);
+    dialog.get_content_area()->pack_start(*scroll, true, true, 6);
+    dialog.show_all();
+
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    Gtk::ListBoxRow* selected = list->get_selected_row();
+    if (selected == nullptr) {
+        return;
+    }
+    const int index = selected->get_index();
+    if (index < 0 ||
+        static_cast<std::size_t>(index) >= entries.size()) {
+        return;
+    }
+    const std::string id = entries[static_cast<std::size_t>(index)].id;
+
+    Gtk::MessageDialog confirm("Restore backup " + id + "?",
+                               false,
+                               Gtk::MESSAGE_QUESTION,
+                               Gtk::BUTTONS_OK_CANCEL,
+                               true);
+    confirm.set_transient_for(*this);
+    confirm.set_secondary_text(
+        "Chats from backup " + id + " will replace the current chat files.");
+    if (confirm.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    (void)restore_backup(id);
 }
 
 }  // namespace ui
