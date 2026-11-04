@@ -1,8 +1,13 @@
 #include "ui/settings_dialog.h"
 
+#include "core/atomic_file.h"
+#include "core/json.h"
 #include "core/log.h"
+#include "core/names.h"
 #include "core/persona.h"
+#include "core/prompt_manager.h"
 
+#include <algorithm>
 #include <exception>
 #include <string>
 #include <utility>
@@ -80,6 +85,12 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     instruct_format_.append("chatml");
     instruct_format_.append("llama");
 
+    preset_import_.set_label("Import preset");
+    preset_export_.set_label("Export preset");
+    preset_import_.signal_clicked().connect(sigc::mem_fun(*this, &SettingsDialog::on_preset_import));
+    preset_export_.signal_clicked().connect(sigc::mem_fun(*this, &SettingsDialog::on_preset_export));
+    refresh_presets();
+
     prompt_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
     prompt_scroll_.set_size_request(-1, 120);
     prompt_scroll_.add(system_prompt_);
@@ -135,6 +146,13 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     grid_.attach(instruct_format_, 1, row++);
     grid_.attach(*make_label("Context template"), 0, row);
     grid_.attach(context_template_scroll_, 1, row++);
+    grid_.attach(*make_label("Preset"), 0, row);
+    grid_.attach(preset_combo_, 1, row++);
+    auto* preset_buttons = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
+    preset_buttons->pack_start(preset_import_, false, false, 0);
+    preset_buttons->pack_start(preset_export_, false, false, 0);
+    grid_.attach(*make_label("Preset file"), 0, row);
+    grid_.attach(*preset_buttons, 1, row++);
 
     get_content_area()->pack_start(grid_, true, true, 0);
 
@@ -142,6 +160,155 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     show_all_children();
 
     signal_response().connect(sigc::mem_fun(*this, &SettingsDialog::on_response));
+}
+
+void SettingsDialog::refresh_presets() {
+    preset_combo_.remove_all();
+    preset_combo_.append("default");
+    std::vector<std::string> names;
+    std::error_code error;
+    if (std::filesystem::exists(paths_.presets_dir, error) && !error) {
+        for (const std::filesystem::directory_entry& entry :
+             std::filesystem::directory_iterator(paths_.presets_dir, error)) {
+            if (error) {
+                break;
+            }
+            if (!entry.is_regular_file()) {
+                continue;
+            }
+            const std::string stem = entry.path().stem().string();
+            if (entry.path().extension() == ".json" && !stem.empty() && stem != "default") {
+                names.push_back(stem);
+            }
+        }
+    }
+    if (error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("preset list load failed: ") + error.message());
+    }
+    std::sort(names.begin(), names.end());
+    for (const std::string& name : names) {
+        preset_combo_.append(name);
+    }
+}
+
+void SettingsDialog::on_preset_import() {
+    Gtk::FileChooserDialog dialog(*this, "Import preset", Gtk::FILE_CHOOSER_ACTION_OPEN);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Import", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::filesystem::path path = dialog.get_file()->get_path();
+    try {
+        const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "preset");
+        st::PromptPreset preset = st::PromptPreset::from_json(parse_json(text, "preset"));
+        std::string name = preset.name;
+        if (name.empty()) {
+            name = path.stem().string();
+        }
+        name = sanitize_filename(name, "default");
+        preset.name = name;
+        const std::filesystem::path target =
+            safe_join(paths_.presets_dir, name + ".json");
+        if (file_exists(target)) {
+            Gtk::MessageDialog confirm("Overwrite " + target.filename().string() + "?",
+                                       false,
+                                       Gtk::MESSAGE_QUESTION,
+                                       Gtk::BUTTONS_OK_CANCEL,
+                                       true);
+            confirm.set_transient_for(*this);
+            confirm.set_secondary_text("The existing file will be replaced.");
+            if (confirm.run() != Gtk::RESPONSE_OK) {
+                return;
+            }
+        }
+        const std::string serialized = dump_json(preset.to_json(), 2) + "\n";
+        if (serialized.size() > 16u * 1024u * 1024u) {
+            throw std::runtime_error("preset exceeds 16 MiB cap");
+        }
+        std::error_code error;
+        std::filesystem::create_directories(target.parent_path(), error);
+        if (error) {
+            throw std::runtime_error("cannot create directory " + target.parent_path().string() +
+                                     ": " + error.message());
+        }
+        write_file_atomic(target, serialized);
+        refresh_presets();
+        preset_combo_.set_active_text(name);
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("preset import failed: ") + error.what());
+        Gtk::MessageDialog message(*this, "Preset error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+void SettingsDialog::on_preset_export() {
+    const std::string current =
+        sanitize_filename(preset_combo_.get_active_text().raw(), "default");
+    st::PromptPreset preset;
+    preset.name = current;
+    const std::filesystem::path source =
+        safe_join(paths_.presets_dir, current + ".json");
+    if (!file_exists(source)) {
+        const st::PromptManager defaults = st::PromptManager::default_manager();
+        preset.sections = defaults.sections;
+    } else {
+        try {
+            const std::string text = read_file_limited(
+                safe_join(paths_.presets_dir, current + ".json"), 16u * 1024u * 1024u, "preset");
+            preset = st::PromptPreset::from_json(parse_json(text, "preset"));
+            preset.name = current;
+        } catch (const std::exception& error) {
+            st::log_write(st::LogLevel::Error,
+                          std::string("preset export failed: ") + error.what());
+            Gtk::MessageDialog message(*this, "Preset error", false,
+                                       Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+            message.set_secondary_text(error.what());
+            message.run();
+            return;
+        }
+    }
+    Gtk::FileChooserDialog dialog(*this, "Export preset", Gtk::FILE_CHOOSER_ACTION_SAVE);
+    dialog.set_do_overwrite_confirmation(false);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Export", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    dialog.set_current_name(current + ".json");
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::filesystem::path path = dialog.get_file()->get_path();
+    if (file_exists(path)) {
+        Gtk::MessageDialog confirm("Overwrite " + path.filename().string() + "?",
+                                   false,
+                                   Gtk::MESSAGE_QUESTION,
+                                   Gtk::BUTTONS_OK_CANCEL,
+                                   true);
+        confirm.set_transient_for(*this);
+        confirm.set_secondary_text("The existing file will be replaced.");
+        if (confirm.run() != Gtk::RESPONSE_OK) {
+            return;
+        }
+    }
+    try {
+        const std::string serialized = dump_json(preset.to_json(), 2) + "\n";
+        if (serialized.size() > 16u * 1024u * 1024u) {
+            throw std::runtime_error("preset exceeds 16 MiB cap");
+        }
+        write_file_atomic(path, serialized);
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("preset export failed: ") + error.what());
+        Gtk::MessageDialog message(*this, "Preset error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
 }
 
 void SettingsDialog::load() {
@@ -182,6 +349,9 @@ void SettingsDialog::load() {
     instruct_mode_.set_active(settings_.instruct_mode);
     instruct_format_.set_active_text(settings_.instruct_format);
     context_template_.get_buffer()->set_text(settings_.context_template);
+    refresh_presets();
+    preset_combo_.set_active_text(
+        settings_.active_preset.empty() ? "default" : settings_.active_preset);
 }
 
 st::Settings SettingsDialog::build_settings() const {
@@ -248,6 +418,8 @@ st::Settings SettingsDialog::build_settings() const {
         candidate.instruct_format = "plain";
     }
     candidate.context_template = context_template_.get_buffer()->get_text();
+    const std::string preset_text = preset_combo_.get_active_text();
+    candidate.active_preset = preset_text.empty() ? "default" : preset_text;
     candidate.validate();
     return candidate;
 }

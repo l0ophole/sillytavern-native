@@ -133,6 +133,11 @@ if ! grep -q 'smoke: world info' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: prompt preset' <<<"$output"; then
+    echo "smoke test failed: prompt preset failed" >&2
+    exit 1
+fi
+
 if ! grep -q 'smoke: backup round trip' <<<"$output"; then
     echo "smoke test failed: backup round trip failed" >&2
     exit 1

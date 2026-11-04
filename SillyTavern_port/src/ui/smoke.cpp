@@ -6,6 +6,7 @@
 #include "core/identity.h"
 #include "core/json.h"
 #include "core/persona.h"
+#include "core/prompt_manager.h"
 #include "ui/avatar.h"
 #include "ui/main_window.h"
 #include "ui/settings_dialog.h"
@@ -1254,6 +1255,57 @@ int run_smoke_test() {
                 }
             }
             std::cout << "smoke: world info\n";
+        }
+
+        {
+            st::Settings preset_settings = settings;
+            preset_settings.active_preset = "promo";
+            bool saved = false;
+            {
+                PromptManagerDialog manager(window, paths, preset_settings,
+                                            [&saved]() { saved = true; });
+                manager.show_all();
+                manager.set_preset_name("promo");
+                st::PromptSection custom;
+                custom.id = "custom";
+                custom.title = "Custom";
+                custom.content = "Be nice.";
+                custom.enabled = true;
+                custom.order = 0;
+                manager.add_section(custom);
+                manager.save();
+            }
+            if (!saved) {
+                std::cerr << "smoke: prompt preset save failed\n";
+                return 1;
+            }
+            {
+                SettingsDialog reopened(window, paths, preset_settings, []() {});
+                bool found = false;
+                if (reopened.preset_widget().get_model()) {
+                    for (const auto& row : reopened.preset_widget().get_model()->children()) {
+                        Glib::ustring value;
+                        row.get_value(0, value);
+                        if (value == "promo") {
+                            found = true;
+                        }
+                    }
+                }
+                if (!found) {
+                    std::cerr << "smoke: prompt preset combo missing promo\n";
+                    return 1;
+                }
+                const std::string text = st::read_file_limited(
+                    paths.presets_dir / "promo.json", 16u * 1024u * 1024u, "preset");
+                const st::PromptPreset loaded =
+                    st::PromptPreset::from_json(st::parse_json(text, "preset"));
+                if (loaded.sections.size() != std::size_t(1) ||
+                    loaded.sections[0].id != "custom") {
+                    std::cerr << "smoke: prompt preset section count mismatch\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: prompt preset\n";
         }
 
         window.hide();

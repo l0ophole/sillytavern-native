@@ -4,6 +4,7 @@
 #include "core/chat_store.h"
 #include "core/paths.h"
 #include "core/persona.h"
+#include "core/prompt_manager.h"
 #include "core/settings.h"
 #include "core/world_info.h"
 #include "ui/character_list.h"
@@ -87,6 +88,47 @@ private:
     Gtk::Button delete_button_;
 };
 
+class PromptManagerDialog : public Gtk::Dialog {
+public:
+    PromptManagerDialog(Gtk::Window& parent,
+                        const st::Paths& paths,
+                        st::Settings& settings,
+                        std::function<void()> on_saved);
+
+    void add_section(const st::PromptSection& section);
+    void set_preset_name(const std::string& name);
+    void save();
+    void load();
+    const st::PromptPreset& preset() const { return preset_; }
+    const std::string& preset_name() const { return preset_name_; }
+    const std::string& load_error() const { return load_error_; }
+    std::filesystem::path preset_path() const;
+
+private:
+    void refresh_list();
+    void sync_checkboxes();
+    void on_import();
+    void on_export();
+    void on_move_up(std::size_t index);
+    void on_move_down(std::size_t index);
+    void on_response(int response) override;
+
+    const st::Paths& paths_;
+    st::Settings& settings_;
+    std::function<void()> on_saved_;
+    st::PromptPreset preset_;
+    std::string preset_name_ = "default";
+    std::string load_error_;
+
+    Gtk::ListBox list_;
+    Gtk::Entry preset_name_entry_;
+    Gtk::Button import_button_;
+    Gtk::Button export_button_;
+    Gtk::Button up_button_;
+    Gtk::Button down_button_;
+    std::vector<Gtk::CheckButton*> check_buttons_;
+};
+
 class MainWindow : public Gtk::Window {
 public:
     MainWindow(st::Paths paths,
@@ -102,6 +144,7 @@ private:
     void refresh_backup_menu();
     void on_settings();
     void on_personas();
+    void on_prompt_manager();
     void on_world_info();
     void on_character_selected(const st::CharacterEntry& entry);
     void on_backup();
@@ -115,6 +158,7 @@ private:
     Gtk::HeaderBar header_;
     Gtk::Button settings_button_;
     Gtk::Button personas_button_;
+    Gtk::Button prompt_manager_button_;
     Gtk::Button world_info_button_;
     Gtk::MenuButton menu_button_;
     Gtk::Menu backup_menu_;

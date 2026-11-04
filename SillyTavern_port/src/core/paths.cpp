@@ -32,6 +32,7 @@ Paths Paths::resolve(const fs::path& config_home, const fs::path& data_home) {
     paths.characters_dir = paths.data_dir / "characters";
     paths.chats_dir = paths.data_dir / "chats";
     paths.world_info_dir = paths.data_dir / "worldinfo";
+    paths.presets_dir = paths.data_dir / "presets";
     paths.logs_dir = paths.data_dir / "logs";
     paths.settings_file = paths.config_dir / "settings.json";
     paths.instance_lock_file = paths.data_dir / "instance.lock";
@@ -40,7 +41,7 @@ Paths Paths::resolve(const fs::path& config_home, const fs::path& data_home) {
 
 void Paths::ensure() const {
     std::error_code error;
-    for (const auto& directory : {config_dir, data_dir, characters_dir, chats_dir, world_info_dir, logs_dir}) {
+    for (const auto& directory : {config_dir, data_dir, characters_dir, chats_dir, world_info_dir, presets_dir, logs_dir}) {
         if (!fs::create_directories(directory, error) && error) {
             throw std::runtime_error("cannot create directory " + directory.string() + ": " +
                                      error.message());

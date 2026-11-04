@@ -7,6 +7,7 @@
 #include "core/names.h"
 #include "ui/settings_dialog.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -32,6 +33,8 @@ MainWindow::MainWindow(st::Paths paths,
     header_.pack_end(settings_button_);
     personas_button_.set_label("Personas...");
     header_.pack_end(personas_button_);
+    prompt_manager_button_.set_label("Prompt manager...");
+    header_.pack_end(prompt_manager_button_);
     world_info_button_.set_label("World Info...");
     header_.pack_end(world_info_button_);
     backup_item_.set_label("Back up chats");
@@ -89,6 +92,8 @@ MainWindow::MainWindow(st::Paths paths,
         sigc::mem_fun(*this, &MainWindow::on_settings));
     personas_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_personas));
+    prompt_manager_button_.signal_clicked().connect(
+        sigc::mem_fun(*this, &MainWindow::on_prompt_manager));
     world_info_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_world_info));
     backup_item_.signal_activate().connect(sigc::mem_fun(*this, &MainWindow::on_backup));
@@ -139,6 +144,24 @@ void MainWindow::on_personas() {
         st::log_write(st::LogLevel::Error, std::string("persona dialog failed: ") + error.what());
         status_.set_text(
             st::redact_secrets(std::string("Persona error: ") + error.what(), {settings_.api_key}));
+    }
+}
+
+void MainWindow::on_prompt_manager() {
+    try {
+        PromptManagerDialog dialog(*this, paths_, settings_, [this]() {
+            chat_view_->refresh_settings();
+            status_.set_text("Prompt manager saved");
+        });
+        if (!dialog.load_error().empty()) {
+            status_.set_text(st::redact_secrets(
+                std::string("Preset error: ") + dialog.load_error(), {settings_.api_key}));
+        }
+        dialog.run();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("prompt manager failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("Preset error: ") + error.what(), {settings_.api_key}));
     }
 }
 
@@ -785,6 +808,310 @@ void PersonaManagerDialog::on_response(int response) {
                       std::string("persona save failed: ") + error.what());
         load_error_ = error.what();
         Gtk::MessageDialog message(*this, "Persona error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+PromptManagerDialog::PromptManagerDialog(Gtk::Window& parent,
+                                         const st::Paths& paths,
+                                         st::Settings& settings,
+                                         std::function<void()> on_saved)
+    : Gtk::Dialog("Prompt manager", parent, true),
+      paths_(paths),
+      settings_(settings),
+      on_saved_(std::move(on_saved)) {
+    add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    add_button("Save", Gtk::RESPONSE_OK);
+    set_default_response(Gtk::RESPONSE_OK);
+    set_default_size(620, 480);
+
+    preset_name_.clear();
+    preset_name_entry_.set_text(sanitize_filename(settings_.active_preset, "default"));
+
+    list_.set_selection_mode(Gtk::SELECTION_SINGLE);
+    auto* scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    scroll->add(list_);
+
+    import_button_.set_label("Import");
+    export_button_.set_label("Export");
+    up_button_.set_label("Up");
+    down_button_.set_label("Down");
+    import_button_.signal_clicked().connect(sigc::mem_fun(*this, &PromptManagerDialog::on_import));
+    export_button_.signal_clicked().connect(sigc::mem_fun(*this, &PromptManagerDialog::on_export));
+    up_button_.signal_clicked().connect([this]() {
+        Gtk::ListBoxRow* selected = list_.get_selected_row();
+        if (selected != nullptr) {
+            on_move_up(static_cast<std::size_t>(selected->get_index()));
+        }
+    });
+    down_button_.signal_clicked().connect([this]() {
+        Gtk::ListBoxRow* selected = list_.get_selected_row();
+        if (selected != nullptr) {
+            on_move_down(static_cast<std::size_t>(selected->get_index()));
+        }
+    });
+
+    auto* buttons = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
+    buttons->pack_start(up_button_, false, false, 0);
+    buttons->pack_start(down_button_, false, false, 0);
+    buttons->pack_start(import_button_, false, false, 0);
+    buttons->pack_start(export_button_, false, false, 0);
+
+    auto* name_row = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
+    auto* name_label = Gtk::manage(new Gtk::Label("Preset name"));
+    name_label->set_halign(Gtk::ALIGN_START);
+    name_row->pack_start(*name_label, false, false, 0);
+    name_row->pack_start(preset_name_entry_, true, true, 0);
+
+    auto* box = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL, 6));
+    box->pack_start(*name_row, false, false, 0);
+    box->pack_start(*scroll, true, true, 0);
+    box->pack_start(*buttons, false, false, 0);
+    box->set_margin_top(12);
+    box->set_margin_bottom(12);
+    box->set_margin_left(12);
+    box->set_margin_right(12);
+    get_content_area()->pack_start(*box, true, true, 0);
+
+    try {
+        load();
+    } catch (const std::exception& error) {
+        load_error_ = error.what();
+        st::log_write(st::LogLevel::Error, std::string("preset load failed: ") + error.what());
+    }
+    refresh_list();
+    show_all_children();
+    signal_response().connect(sigc::mem_fun(*this, &PromptManagerDialog::on_response));
+}
+
+std::filesystem::path PromptManagerDialog::preset_path() const {
+    return safe_join(paths_.presets_dir,
+                     sanitize_filename(preset_name_, "default") + ".json");
+}
+
+void PromptManagerDialog::load() {
+    load_error_.clear();
+    preset_name_ = sanitize_filename(preset_name_entry_.get_text().raw(), "default");
+    if (preset_name_.empty()) {
+        preset_name_ = sanitize_filename(settings_.active_preset, "default");
+    }
+    preset_name_entry_.set_text(preset_name_);
+    const std::filesystem::path path = preset_path();
+    if (!file_exists(path)) {
+        preset_ = st::PromptPreset{};
+        preset_.name = preset_name_;
+        if (preset_name_ == "default") {
+            const st::PromptManager defaults = st::PromptManager::default_manager();
+            preset_.sections = defaults.sections;
+            preset_.sampling_overrides = st::Json::object();
+        }
+        refresh_list();
+        return;
+    }
+    const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "preset");
+    preset_ = st::PromptPreset::from_json(parse_json(text, "preset"));
+    preset_.name = preset_name_;
+    refresh_list();
+}
+
+void PromptManagerDialog::save() {
+    const std::string entered = preset_name_entry_.get_text().raw();
+    if (!entered.empty()) {
+        preset_name_ = sanitize_filename(entered, "default");
+    }
+    sync_checkboxes();
+    for (std::size_t i = 0; i < preset_.sections.size(); ++i) {
+        preset_.sections[i].order = static_cast<int>(i);
+    }
+    preset_.name = preset_name_;
+    const std::string serialized = dump_json(preset_.to_json(), 2) + "\n";
+    if (serialized.size() > 16u * 1024u * 1024u) {
+        throw std::runtime_error("preset exceeds 16 MiB cap");
+    }
+    const std::filesystem::path path = preset_path();
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) {
+        throw std::runtime_error("cannot create directory " + path.parent_path().string() + ": " +
+                                 error.message());
+    }
+    // sampling_overrides round-trips verbatim through to_json()/from_json().
+    write_file_atomic(path, serialized);
+    settings_.active_preset = preset_name_;
+    settings_.validate();
+    settings_.save(paths_.settings_file);
+    if (on_saved_) {
+        on_saved_();
+    }
+}
+
+void PromptManagerDialog::add_section(const st::PromptSection& section) {
+    if (section.id.empty()) {
+        return;
+    }
+    preset_.sections.push_back(section);
+    for (std::size_t i = 0; i < preset_.sections.size(); ++i) {
+        preset_.sections[i].order = static_cast<int>(i);
+    }
+    refresh_list();
+}
+
+void PromptManagerDialog::set_preset_name(const std::string& name) {
+    preset_name_ = sanitize_filename(name, "default");
+    preset_.name = preset_name_;
+    preset_name_entry_.set_text(preset_name_);
+}
+
+void PromptManagerDialog::sync_checkboxes() {
+    const std::size_t count = std::min(check_buttons_.size(), preset_.sections.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        preset_.sections[i].enabled = check_buttons_[i]->get_active();
+    }
+}
+
+void PromptManagerDialog::refresh_list() {
+    for (Gtk::Widget* child : list_.get_children()) {
+        list_.remove(*child);
+    }
+    check_buttons_.clear();
+    for (std::size_t i = 0; i < preset_.sections.size(); ++i) {
+        const st::PromptSection& section = preset_.sections[i];
+        auto* row = Gtk::manage(new Gtk::ListBoxRow());
+        auto* box = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
+        auto* check = Gtk::manage(new Gtk::CheckButton(
+            section.title.empty() ? section.id : section.title));
+        check->set_active(section.enabled);
+        check_buttons_.push_back(check);
+        auto* id_label = Gtk::manage(new Gtk::Label(section.id));
+        id_label->set_halign(Gtk::ALIGN_START);
+        auto* up = Gtk::manage(new Gtk::Button("Up"));
+        auto* down = Gtk::manage(new Gtk::Button("Down"));
+        up->signal_clicked().connect(
+            [this, i]() { on_move_up(i); });
+        down->signal_clicked().connect(
+            [this, i]() { on_move_down(i); });
+        box->pack_start(*check, false, false, 0);
+        box->pack_start(*id_label, true, true, 0);
+        box->pack_start(*up, false, false, 0);
+        box->pack_start(*down, false, false, 0);
+        row->add(*box);
+        list_.append(*row);
+    }
+    list_.show_all();
+}
+
+void PromptManagerDialog::on_move_up(std::size_t index) {
+    if (index == 0 || index >= preset_.sections.size()) {
+        return;
+    }
+    sync_checkboxes();
+    st::PromptManager manager;
+    manager.sections = preset_.sections;
+    manager.move(index, index - 1);
+    preset_.sections = manager.sections;
+    refresh_list();
+}
+
+void PromptManagerDialog::on_move_down(std::size_t index) {
+    if (index + 1 >= preset_.sections.size()) {
+        return;
+    }
+    sync_checkboxes();
+    st::PromptManager manager;
+    manager.sections = preset_.sections;
+    manager.move(index, index + 1);
+    preset_.sections = manager.sections;
+    refresh_list();
+}
+
+void PromptManagerDialog::on_import() {
+    Gtk::FileChooserDialog dialog(*this, "Import preset", Gtk::FILE_CHOOSER_ACTION_OPEN);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Import", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::filesystem::path path = dialog.get_file()->get_path();
+    try {
+        const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "preset");
+        preset_ = st::PromptPreset::from_json(parse_json(text, "preset"));
+        std::string name = preset_.name;
+        if (name.empty()) {
+            name = path.stem().string();
+        }
+        set_preset_name(name);
+        load_error_.clear();
+        refresh_list();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("preset import failed: ") + error.what());
+        load_error_ = error.what();
+        Gtk::MessageDialog message(*this, "Preset error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+void PromptManagerDialog::on_export() {
+    sync_checkboxes();
+    preset_.name = preset_name_;
+    Gtk::FileChooserDialog dialog(*this, "Export preset", Gtk::FILE_CHOOSER_ACTION_SAVE);
+    dialog.set_do_overwrite_confirmation(false);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Export", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    dialog.set_current_name(sanitize_filename(preset_name_, "default") + ".json");
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::filesystem::path path = dialog.get_file()->get_path();
+    if (file_exists(path)) {
+        Gtk::MessageDialog confirm("Overwrite " + path.filename().string() + "?",
+                                   false,
+                                   Gtk::MESSAGE_QUESTION,
+                                   Gtk::BUTTONS_OK_CANCEL,
+                                   true);
+        confirm.set_transient_for(*this);
+        confirm.set_secondary_text("The existing file will be replaced.");
+        if (confirm.run() != Gtk::RESPONSE_OK) {
+            return;
+        }
+    }
+    try {
+        const std::string serialized = dump_json(preset_.to_json(), 2) + "\n";
+        if (serialized.size() > 16u * 1024u * 1024u) {
+            throw std::runtime_error("preset exceeds 16 MiB cap");
+        }
+        write_file_atomic(path, serialized);
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("preset export failed: ") + error.what());
+        load_error_ = error.what();
+        Gtk::MessageDialog message(*this, "Preset error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+void PromptManagerDialog::on_response(int response) {
+    if (response != Gtk::RESPONSE_OK) {
+        hide();
+        return;
+    }
+    try {
+        save();
+        hide();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("preset save failed: ") + error.what());
+        load_error_ = error.what();
+        Gtk::MessageDialog message(*this, "Preset error", false,
                                    Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
         message.set_secondary_text(error.what());
         message.run();

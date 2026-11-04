@@ -21,6 +21,7 @@ public:
     Gtk::TextView& authors_note_widget() { return authors_note_; }
     Gtk::SpinButton& authors_note_depth_widget() { return authors_note_depth_; }
     Gtk::ComboBoxText& persona_widget() { return persona_combo_; }
+    Gtk::ComboBoxText& preset_widget() { return preset_combo_; }
     Gtk::TextView& persona_description_widget() { return persona_description_; }
     Gtk::CheckButton& instruct_enabled_widget() { return instruct_mode_; }
     Gtk::ComboBoxText& instruct_format_widget() { return instruct_format_; }
@@ -28,6 +29,9 @@ public:
 
 private:
     void load();
+    void refresh_presets();
+    void on_preset_import();
+    void on_preset_export();
     st::Settings build_settings() const;
     void on_response(int response) override;
 
@@ -53,6 +57,9 @@ private:
     Gtk::ScrolledWindow authors_note_scroll_;
     Gtk::SpinButton authors_note_depth_;
     Gtk::ComboBoxText persona_combo_{true};
+    Gtk::ComboBoxText preset_combo_;
+    Gtk::Button preset_import_;
+    Gtk::Button preset_export_;
     Gtk::TextView persona_description_;
     Gtk::ScrolledWindow persona_description_scroll_;
     Gtk::CheckButton instruct_mode_;
