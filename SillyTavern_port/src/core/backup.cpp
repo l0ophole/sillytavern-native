@@ -64,7 +64,10 @@ std::vector<ChatFile> collect_chats(const fs::path& root) {
             break;
         }
         std::error_code type_error;
-        if (!item.is_directory(type_error) || type_error) {
+        // Skip symlinks: never follow them outside chats_root.
+        const auto status = item.symlink_status(type_error);
+        if (type_error || status.type() == fs::file_type::symlink ||
+            status.type() != fs::file_type::directory) {
             continue;
         }
         const std::string name = item.path().filename().string();
@@ -83,7 +86,9 @@ std::vector<ChatFile> collect_chats(const fs::path& root) {
                 break;
             }
             std::error_code type_error;
-            if (!item.is_regular_file(type_error) || type_error) {
+            const auto status = item.symlink_status(type_error);
+            if (type_error || status.type() == fs::file_type::symlink ||
+                status.type() != fs::file_type::regular) {
                 continue;
             }
             if (item.path().extension() != ".jsonl") {
@@ -208,11 +213,30 @@ std::string BackupManager::create(const std::string& label) {
             }
         }
 
+        // Re-measure copied bytes from the staging files themselves (post-copy
+        // basis, not pre-copy sizes) to close the TOCTOU window where a chat
+        // grows between file_size and copy_file. Manifest bytes uses this
+        // same measurement.
+        std::uintmax_t actual_total = 0;
+        for (const auto& file : files) {
+            const fs::path destination = staging / file.character / file.filename;
+            std::error_code size_error;
+            const std::uintmax_t copied_size = fs::file_size(destination, size_error);
+            if (size_error) {
+                throw std::runtime_error("cannot stat copied chat " + destination.string() +
+                                         ": " + size_error.message());
+            }
+            actual_total += copied_size;
+            if (actual_total > kMaxBackupBytes) {
+                throw std::runtime_error("backup exceeds 512 MiB limit");
+            }
+        }
+
         Json manifest = Json::object();
         manifest["id"] = id;
         manifest["created"] = created;
         manifest["chats"] = files.size();
-        manifest["bytes"] = total;
+        manifest["bytes"] = actual_total;
         write_file_atomic(staging / "manifest.json", dump_json(manifest, 2) + "\n");
 
         std::error_code rename_error;
@@ -323,9 +347,18 @@ void BackupManager::restore(const std::string& id) const {
     }
 
     std::error_code error;
+    if (fs::is_symlink(backup, error)) {
+        throw std::runtime_error("backup not found: " + id);
+    }
+    error.clear();
     if (!fs::is_directory(backup, error)) {
         throw std::runtime_error("backup not found: " + id);
     }
+    error.clear();
+    if (fs::is_symlink(backup / "manifest.json", error)) {
+        throw std::runtime_error("backup not found: " + id);
+    }
+    error.clear();
     if (!fs::is_regular_file(backup / "manifest.json", error)) {
         throw std::runtime_error("backup not found: " + id);
     }
@@ -344,7 +377,11 @@ void BackupManager::restore(const std::string& id) const {
         if (error) {
             break;
         }
-        if (!item.is_directory()) {
+        std::error_code type_error;
+        // Skip symlinks inside a crafted backup: never read outside the backup.
+        const auto status = item.symlink_status(type_error);
+        if (type_error || status.type() == fs::file_type::symlink ||
+            status.type() != fs::file_type::directory) {
             continue;
         }
         characters.push_back(item.path());
@@ -362,6 +399,11 @@ void BackupManager::restore(const std::string& id) const {
             if (iter_error) {
                 break;
             }
+            std::error_code type_error;
+            const auto status = item.symlink_status(type_error);
+            if (!type_error && status.type() == fs::file_type::symlink) {
+                continue;
+            }
             if (item.path().extension() == ".jsonl") {
                 chats.push_back(item.path());
             }
@@ -372,12 +414,29 @@ void BackupManager::restore(const std::string& id) const {
         std::sort(chats.begin(), chats.end());
         for (const auto& chat_path : chats) {
             std::error_code type_error;
+            if (fs::is_symlink(chat_path, type_error)) {
+                throw std::runtime_error("backup chat is not a regular file: " + chat_path.string());
+            }
+            type_error.clear();
             if (!fs::is_regular_file(chat_path, type_error) || type_error) {
                 throw std::runtime_error("backup chat is not a regular file: " + chat_path.string());
             }
             const std::string filename = chat_path.filename().string();
             // safe_join validates that the destination stays under chats_root_.
             const fs::path destination = safe_join(chats_root_, fs::path(character) / filename);
+            // Harden the write side: a pre-existing symlink at the destination
+            // directory or file would let write_file_atomic land outside
+            // chats_root. Refuse before any write happens.
+            std::error_code dest_error;
+            if (fs::is_symlink(destination.parent_path(), dest_error)) {
+                throw std::runtime_error("restore destination is a symlink: " +
+                                         destination.parent_path().string());
+            }
+            dest_error.clear();
+            if (fs::is_symlink(destination, dest_error)) {
+                throw std::runtime_error("restore destination is a symlink: " +
+                                         destination.string());
+            }
             std::string content = read_file_limited(chat_path, kMaxChatBytes, filename);
             pending.push_back(PendingWrite{destination, std::move(content)});
         }
