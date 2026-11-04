@@ -1,10 +1,12 @@
 #include "ui/settings_dialog.h"
 
 #include "core/log.h"
+#include "core/persona.h"
 
 #include <exception>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace st {
 namespace ui {
@@ -60,6 +62,24 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     authors_note_depth_.set_increments(1.0, 1.0);
     authors_note_depth_.set_digits(0);
 
+    persona_combo_.set_entry_text_column(0);
+    persona_combo_.append("Built-in");
+    try {
+        const st::PersonaStore store =
+            st::PersonaStore::load(paths.data_dir / "personas.json");
+        for (const st::Persona& persona : store.personas) {
+            persona_combo_.append(persona.name);
+        }
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("persona list load failed: ") + error.what());
+    }
+
+    instruct_mode_.set_label("Enable instruct mode");
+    instruct_format_.append("plain");
+    instruct_format_.append("chatml");
+    instruct_format_.append("llama");
+
     prompt_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
     prompt_scroll_.set_size_request(-1, 120);
     prompt_scroll_.add(system_prompt_);
@@ -67,6 +87,14 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     authors_note_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
     authors_note_scroll_.set_size_request(-1, 80);
     authors_note_scroll_.add(authors_note_);
+
+    persona_description_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    persona_description_scroll_.set_size_request(-1, 80);
+    persona_description_scroll_.add(persona_description_);
+
+    context_template_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    context_template_scroll_.set_size_request(-1, 80);
+    context_template_scroll_.add(context_template_);
 
     int row = 0;
     grid_.attach(*make_label("API base URL"), 0, row);
@@ -97,6 +125,16 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     grid_.attach(authors_note_scroll_, 1, row++);
     grid_.attach(*make_label("Note depth"), 0, row);
     grid_.attach(authors_note_depth_, 1, row++);
+    grid_.attach(*make_label("Persona"), 0, row);
+    grid_.attach(persona_combo_, 1, row++);
+    grid_.attach(*make_label("Persona description"), 0, row);
+    grid_.attach(persona_description_scroll_, 1, row++);
+    grid_.attach(*make_label("Instruct mode"), 0, row);
+    grid_.attach(instruct_mode_, 1, row++);
+    grid_.attach(*make_label("Instruct format"), 0, row);
+    grid_.attach(instruct_format_, 1, row++);
+    grid_.attach(*make_label("Context template"), 0, row);
+    grid_.attach(context_template_scroll_, 1, row++);
 
     get_content_area()->pack_start(grid_, true, true, 0);
 
@@ -121,6 +159,29 @@ void SettingsDialog::load() {
     authors_note_enabled_.set_active(settings_.authors_note_enabled);
     authors_note_.get_buffer()->set_text(settings_.authors_note);
     authors_note_depth_.set_value(settings_.authors_note_depth);
+
+    std::string description;
+    const std::string persona_name = settings_.persona_name;
+    if (!persona_name.empty()) {
+        persona_combo_.set_active_text(persona_name);
+        try {
+            const st::PersonaStore store =
+                st::PersonaStore::load(paths_.data_dir / "personas.json");
+            for (const st::Persona& persona : store.personas) {
+                if (persona.name == persona_name) {
+                    description = persona.description;
+                    break;
+                }
+            }
+        } catch (const std::exception&) {
+        }
+    } else {
+        persona_combo_.set_active_text("Built-in");
+    }
+    persona_description_.get_buffer()->set_text(description);
+    instruct_mode_.set_active(settings_.instruct_mode);
+    instruct_format_.set_active_text(settings_.instruct_format);
+    context_template_.get_buffer()->set_text(settings_.context_template);
 }
 
 st::Settings SettingsDialog::build_settings() const {
@@ -139,6 +200,54 @@ st::Settings SettingsDialog::build_settings() const {
     candidate.authors_note_enabled = authors_note_enabled_.get_active();
     candidate.authors_note = authors_note_.get_buffer()->get_text();
     candidate.authors_note_depth = authors_note_depth_.get_value_as_int();
+
+    // Keep Settings::persona_name and PersonaStore::active_name in sync so
+    // the two dual sources never leave divergent selections. A corrupt
+    // personas.json is left untouched instead of being silently overwritten.
+    const std::string persona_text = persona_combo_.get_active_text();
+    st::PersonaStore store;
+    bool store_loaded = true;
+    try {
+        store = st::PersonaStore::load(paths_.data_dir / "personas.json");
+    } catch (const std::exception& error) {
+        store_loaded = false;
+        st::log_write(st::LogLevel::Error,
+                      std::string("persona store load failed: ") + error.what());
+    }
+    if (store_loaded) {
+        if (persona_text.empty() ||
+            persona_text == "Built-in") {
+            candidate.persona_name = "";
+            store.active_name = "";
+        } else {
+            candidate.persona_name = persona_text;
+            store.active_name = persona_text;
+            bool found = false;
+            for (st::Persona& persona : store.personas) {
+                if (persona.name == persona_text) {
+                    persona.description = persona_description_.get_buffer()->get_text();
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                st::Persona fresh;
+                fresh.name = persona_text;
+                fresh.description = persona_description_.get_buffer()->get_text();
+                store.personas.push_back(std::move(fresh));
+            }
+        }
+        store.save(paths_.data_dir / "personas.json");
+    } else {
+        candidate.persona_name = persona_text == "Built-in" ? "" : persona_text;
+    }
+
+    candidate.instruct_mode = instruct_mode_.get_active();
+    candidate.instruct_format = instruct_format_.get_active_text();
+    if (candidate.instruct_format.empty()) {
+        candidate.instruct_format = "plain";
+    }
+    candidate.context_template = context_template_.get_buffer()->get_text();
     candidate.validate();
     return candidate;
 }

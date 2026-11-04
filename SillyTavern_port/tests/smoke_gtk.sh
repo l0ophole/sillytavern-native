@@ -113,6 +113,11 @@ if ! grep -q 'smoke: authors note' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: persona' <<<"$output"; then
+    echo "smoke test failed: persona failed" >&2
+    exit 1
+fi
+
 if ! grep -q 'smoke: markdown render' <<<"$output"; then
     echo "smoke test failed: markdown render failed" >&2
     exit 1

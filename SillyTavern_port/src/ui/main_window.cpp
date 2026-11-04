@@ -30,6 +30,8 @@ MainWindow::MainWindow(st::Paths paths,
     header_.set_show_close_button(true);
     settings_button_.set_label("Settings");
     header_.pack_end(settings_button_);
+    personas_button_.set_label("Personas...");
+    header_.pack_end(personas_button_);
     world_info_button_.set_label("World Info...");
     header_.pack_end(world_info_button_);
     backup_item_.set_label("Back up chats");
@@ -85,6 +87,8 @@ MainWindow::MainWindow(st::Paths paths,
 
     settings_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_settings));
+    personas_button_.signal_clicked().connect(
+        sigc::mem_fun(*this, &MainWindow::on_personas));
     world_info_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_world_info));
     backup_item_.signal_activate().connect(sigc::mem_fun(*this, &MainWindow::on_backup));
@@ -115,6 +119,26 @@ void MainWindow::on_settings() {
         st::log_write(st::LogLevel::Error, std::string("settings dialog failed: ") + error.what());
         status_.set_text(
             st::redact_secrets(std::string("Settings error: ") + error.what(), {settings_.api_key}));
+    }
+}
+
+void MainWindow::on_personas() {
+    try {
+        PersonaManagerDialog dialog(*this, paths_, settings_, [this]() {
+            // personas.json edits refresh via SettingsDialog on next open;
+            // keep the active selection visible in the composer prompt.
+            chat_view_->refresh_settings();
+            status_.set_text("Personas saved");
+        });
+        if (!dialog.load_error().empty()) {
+            status_.set_text(st::redact_secrets(
+                std::string("Persona error: ") + dialog.load_error(), {settings_.api_key}));
+        }
+        dialog.run();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("persona dialog failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("Persona error: ") + error.what(), {settings_.api_key}));
     }
 }
 
@@ -561,6 +585,201 @@ void WorldInfoDialog::on_response(int response) {
                       std::string("world info save failed: ") + error.what());
         load_error_ = error.what();
         Gtk::MessageDialog message(*this, "World Info error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+PersonaManagerDialog::PersonaManagerDialog(Gtk::Window& parent,
+                                           const st::Paths& paths,
+                                           st::Settings& settings,
+                                           std::function<void()> on_saved)
+    : Gtk::Dialog("Personas", parent, true),
+      paths_(paths),
+      settings_(settings),
+      on_saved_(std::move(on_saved)) {
+    add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    add_button("Save", Gtk::RESPONSE_OK);
+    set_default_response(Gtk::RESPONSE_OK);
+    set_default_size(520, 420);
+
+    list_.set_selection_mode(Gtk::SELECTION_SINGLE);
+    auto* scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    scroll->add(list_);
+
+    add_button_.set_label("Add");
+    delete_button_.set_label("Delete");
+    add_button_.signal_clicked().connect(sigc::mem_fun(*this, &PersonaManagerDialog::on_add_persona));
+    delete_button_.signal_clicked().connect(sigc::mem_fun(*this, &PersonaManagerDialog::on_delete));
+
+    auto* buttons = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
+    buttons->pack_start(add_button_, false, false, 0);
+    buttons->pack_start(delete_button_, false, false, 0);
+
+    auto* box = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL, 6));
+    box->pack_start(*scroll, true, true, 0);
+    box->pack_start(*buttons, false, false, 0);
+    box->set_margin_top(12);
+    box->set_margin_bottom(12);
+    box->set_margin_left(12);
+    box->set_margin_right(12);
+    get_content_area()->pack_start(*box, true, true, 0);
+
+    try {
+        load();
+    } catch (const std::exception& error) {
+        load_error_ = error.what();
+        st::log_write(st::LogLevel::Error, std::string("persona load failed: ") + error.what());
+    }
+    refresh_list();
+    show_all_children();
+    signal_response().connect(sigc::mem_fun(*this, &PersonaManagerDialog::on_response));
+}
+
+std::filesystem::path PersonaManagerDialog::store_path() const {
+    return paths_.data_dir / "personas.json";
+}
+
+void PersonaManagerDialog::load() {
+    load_error_.clear();
+    store_ = st::PersonaStore::load(store_path());
+    refresh_list();
+}
+
+void PersonaManagerDialog::save() {
+    // Keep the dual selection sources in sync: whichever persona is active
+    // in the store becomes Settings::persona_name.
+    settings_.persona_name = store_.active_name;
+    settings_.validate();
+    store_.save(store_path());
+    settings_.save(paths_.settings_file);
+    if (on_saved_) {
+        on_saved_();
+    }
+}
+
+void PersonaManagerDialog::add_persona(const st::Persona& persona) {
+    if (persona.name.empty()) {
+        return;
+    }
+    bool found = false;
+    for (st::Persona& existing : store_.personas) {
+        if (existing.name == persona.name) {
+            existing = persona;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        store_.personas.push_back(persona);
+    }
+    store_.active_name = persona.name;
+    refresh_list();
+}
+
+void PersonaManagerDialog::refresh_list() {
+    for (Gtk::Widget* child : list_.get_children()) {
+        list_.remove(*child);
+    }
+    for (const st::Persona& persona : store_.personas) {
+        auto* row = Gtk::manage(new Gtk::ListBoxRow());
+        std::string text = persona.name;
+        if (!persona.description.empty()) {
+            text += " \xe2\x80\x94 " + persona.description;
+        }
+        if (persona.name == store_.active_name) {
+            text += " (active)";
+        }
+        row->add(*Gtk::manage(new Gtk::Label(text)));
+        list_.append(*row);
+    }
+    list_.show_all();
+}
+
+namespace {
+
+bool edit_persona_dialog(Gtk::Window& parent, st::Persona& persona) {
+    Gtk::Dialog dialog("Persona", parent, true);
+    dialog.set_default_size(520, 320);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Save", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+
+    auto* grid = Gtk::manage(new Gtk::Grid());
+    grid->set_row_spacing(8);
+    grid->set_column_spacing(12);
+    grid->set_margin_top(12);
+    grid->set_margin_bottom(12);
+    grid->set_margin_left(12);
+    grid->set_margin_right(12);
+
+    auto* name = Gtk::manage(new Gtk::Entry());
+    name->set_text(persona.name);
+    auto* description = Gtk::manage(new Gtk::TextView());
+    description->set_wrap_mode(Gtk::WRAP_WORD_CHAR);
+    description->get_buffer()->set_text(persona.description);
+    auto* description_scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    description_scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    description_scroll->set_size_request(-1, 80);
+    description_scroll->add(*description);
+
+    int row = 0;
+    grid->attach(*wi_label("Name"), 0, row);
+    grid->attach(*name, 1, row++);
+    grid->attach(*wi_label("Description"), 0, row);
+    grid->attach(*description_scroll, 1, row++);
+
+    dialog.get_content_area()->pack_start(*grid, true, true, 0);
+    dialog.show_all();
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return false;
+    }
+    persona.name = name->get_text().raw();
+    persona.description = description->get_buffer()->get_text().raw();
+    return true;
+}
+
+}  // namespace
+
+void PersonaManagerDialog::on_add_persona() {
+    st::Persona persona;
+    if (edit_persona_dialog(*this, persona) && !persona.name.empty()) {
+        add_persona(persona);
+    }
+}
+
+void PersonaManagerDialog::on_delete() {
+    Gtk::ListBoxRow* selected = list_.get_selected_row();
+    if (selected == nullptr) {
+        return;
+    }
+    const int index = selected->get_index();
+    if (index < 0 || static_cast<std::size_t>(index) >= store_.personas.size()) {
+        return;
+    }
+    const std::string removed = store_.personas[static_cast<std::size_t>(index)].name;
+    store_.personas.erase(store_.personas.begin() + index);
+    if (removed == store_.active_name) {
+        store_.active_name = "";
+    }
+    refresh_list();
+}
+
+void PersonaManagerDialog::on_response(int response) {
+    if (response != Gtk::RESPONSE_OK) {
+        hide();
+        return;
+    }
+    try {
+        save();
+        hide();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("persona save failed: ") + error.what());
+        load_error_ = error.what();
+        Gtk::MessageDialog message(*this, "Persona error", false,
                                    Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
         message.set_secondary_text(error.what());
         message.run();

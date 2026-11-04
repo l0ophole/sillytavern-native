@@ -5,6 +5,7 @@
 #include "core/chat_session.h"
 #include "core/identity.h"
 #include "core/json.h"
+#include "core/persona.h"
 #include "ui/avatar.h"
 #include "ui/main_window.h"
 #include "ui/settings_dialog.h"
@@ -1023,6 +1024,75 @@ int run_smoke_test() {
                 }
             }
             std::cout << "smoke: authors note\n";
+        }
+
+        {
+            st::Settings persona_settings = settings;
+            bool saved = false;
+            {
+                SettingsDialog dialog(window, paths, persona_settings, [&saved]() { saved = true; });
+                dialog.show_all();
+                dialog.persona_widget().set_active_text("Rook");
+                // Typing a brand-new name into an editable ComboBoxText does
+                // not add it to the list, so drive it like a selectable row:
+                // ensure the name exists, then activate it.
+                {
+                    bool present = false;
+                    if (dialog.persona_widget().get_model()) {
+                        for (const auto& row : dialog.persona_widget().get_model()->children()) {
+                            Glib::ustring value;
+                            row.get_value(0, value);
+                            if (value == "Rook") {
+                                present = true;
+                            }
+                        }
+                    }
+                    if (!present) {
+                        dialog.persona_widget().append("Rook");
+                    }
+                }
+                dialog.persona_widget().set_active(1);
+                dialog.persona_description_widget().get_buffer()->set_text("Calm guide.");
+                dialog.instruct_enabled_widget().set_active(true);
+                dialog.instruct_format_widget().set_active(1);
+                dialog.context_template_widget().get_buffer()->set_text("{{char}} greets {{user}}");
+                dialog.response(Gtk::RESPONSE_OK);
+            }
+            if (!saved || persona_settings.persona_name != "Rook" ||
+                !persona_settings.instruct_mode ||
+                persona_settings.instruct_format != "chatml" ||
+                persona_settings.context_template != "{{char}} greets {{user}}") {
+                std::cerr << "smoke: persona save failed\n";
+                return 1;
+            }
+            // Persona description syncs into personas.json via PersonaStore.
+            {
+                bool found_description = false;
+                try {
+                    const st::PersonaStore store = st::PersonaStore::load(paths.data_dir / "personas.json");
+                    if (store.active_name == "Rook" && store.active() != nullptr &&
+                        store.active()->description == "Calm guide.") {
+                        found_description = true;
+                    }
+                } catch (const std::exception&) {
+                }
+                if (!found_description) {
+                    std::cerr << "smoke: persona store save failed\n";
+                    return 1;
+                }
+            }
+            {
+                SettingsDialog reopened(window, paths, persona_settings, []() {});
+                if (reopened.persona_widget().get_active_text() != "Rook" ||
+                    reopened.persona_description_widget().get_buffer()->get_text() != "Calm guide." ||
+                    !reopened.instruct_enabled_widget().get_active() ||
+                    reopened.instruct_format_widget().get_active_text() != "chatml" ||
+                    reopened.context_template_widget().get_buffer()->get_text() != "{{char}} greets {{user}}") {
+                    std::cerr << "smoke: persona round-trip failed\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: persona\n";
         }
 
         {

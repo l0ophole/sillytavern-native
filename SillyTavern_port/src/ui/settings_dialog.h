@@ -20,6 +20,11 @@ public:
     Gtk::CheckButton& authors_note_enabled_widget() { return authors_note_enabled_; }
     Gtk::TextView& authors_note_widget() { return authors_note_; }
     Gtk::SpinButton& authors_note_depth_widget() { return authors_note_depth_; }
+    Gtk::ComboBoxText& persona_widget() { return persona_combo_; }
+    Gtk::TextView& persona_description_widget() { return persona_description_; }
+    Gtk::CheckButton& instruct_enabled_widget() { return instruct_mode_; }
+    Gtk::ComboBoxText& instruct_format_widget() { return instruct_format_; }
+    Gtk::TextView& context_template_widget() { return context_template_; }
 
 private:
     void load();
@@ -47,6 +52,13 @@ private:
     Gtk::TextView authors_note_;
     Gtk::ScrolledWindow authors_note_scroll_;
     Gtk::SpinButton authors_note_depth_;
+    Gtk::ComboBoxText persona_combo_{true};
+    Gtk::TextView persona_description_;
+    Gtk::ScrolledWindow persona_description_scroll_;
+    Gtk::CheckButton instruct_mode_;
+    Gtk::ComboBoxText instruct_format_;
+    Gtk::TextView context_template_;
+    Gtk::ScrolledWindow context_template_scroll_;
 };
 
 }  // namespace ui

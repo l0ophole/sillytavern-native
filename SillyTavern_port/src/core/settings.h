@@ -26,6 +26,9 @@ struct Settings {
     bool authors_note_enabled = false;
     std::string authors_note;
     int authors_note_depth = 4;
+    bool instruct_mode = false;
+    std::string instruct_format = "plain";
+    std::string context_template;
     bool world_info_enabled = false;
     std::string world_info_book = "lorebook";
     Json unknown = Json::object();

@@ -90,6 +90,15 @@ Settings Settings::from_json(const Json& value) {
     if (value.contains("authors_note_depth") && value["authors_note_depth"].is_number_integer()) {
         settings.authors_note_depth = value["authors_note_depth"].get<int>();
     }
+    if (value.contains("instruct_mode") && value["instruct_mode"].is_boolean()) {
+        settings.instruct_mode = value["instruct_mode"].get<bool>();
+    }
+    if (value.contains("instruct_format") && value["instruct_format"].is_string()) {
+        settings.instruct_format = value["instruct_format"].get<std::string>();
+    }
+    if (value.contains("context_template") && value["context_template"].is_string()) {
+        settings.context_template = value["context_template"].get<std::string>();
+    }
     if (value.contains("world_info_enabled") && value["world_info_enabled"].is_boolean()) {
         settings.world_info_enabled = value["world_info_enabled"].get<bool>();
     }
@@ -101,6 +110,7 @@ Settings Settings::from_json(const Json& value) {
                             "max_tokens", "context_size", "user_name", "persona_name", "system_prompt",
                             "stream", "request_timeout_seconds", "last_character", "last_chat",
                             "authors_note_enabled", "authors_note", "authors_note_depth",
+                            "instruct_mode", "instruct_format", "context_template",
                             "world_info_enabled", "world_info_book"}) {
         erase_known(settings.unknown, key);
     }
@@ -157,6 +167,9 @@ Json Settings::to_json() const {
     value["authors_note_enabled"] = authors_note_enabled;
     value["authors_note"] = authors_note;
     value["authors_note_depth"] = authors_note_depth;
+    value["instruct_mode"] = instruct_mode;
+    value["instruct_format"] = instruct_format;
+    value["context_template"] = context_template;
     value["world_info_enabled"] = world_info_enabled;
     value["world_info_book"] = world_info_book;
     return value;
@@ -190,6 +203,12 @@ void Settings::validate() {
     authors_note_depth = std::clamp(authors_note_depth, 0, 100);
     if (authors_note.size() > 4096) {
         authors_note.resize(4096);
+    }
+    if (instruct_format != "plain" && instruct_format != "chatml" && instruct_format != "llama") {
+        instruct_format = "plain";
+    }
+    if (context_template.size() > 8192) {
+        context_template.resize(8192);
     }
     if (trim(system_prompt).empty()) {
         system_prompt =
