@@ -1,10 +1,16 @@
 #include "ui/main_window.h"
 
+#include "core/atomic_file.h"
 #include "core/backup.h"
+#include "core/json.h"
 #include "core/log.h"
+#include "core/names.h"
 #include "ui/settings_dialog.h"
 
+#include <filesystem>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace st {
 namespace ui {
@@ -24,6 +30,8 @@ MainWindow::MainWindow(st::Paths paths,
     header_.set_show_close_button(true);
     settings_button_.set_label("Settings");
     header_.pack_end(settings_button_);
+    world_info_button_.set_label("World Info...");
+    header_.pack_end(world_info_button_);
     backup_item_.set_label("Back up chats");
     restore_item_.set_label("Restore backup...");
     backup_menu_.append(backup_item_);
@@ -38,7 +46,7 @@ MainWindow::MainWindow(st::Paths paths,
         chats_, settings_, [this](const std::string& text) {
             status_.set_text(st::redact_secrets(text, {settings_.api_key}));
             refresh_backup_menu();
-        });
+        }, &paths_);
     character_list_ = std::make_unique<CharacterList>(
         *this,
         characters_,
@@ -77,6 +85,8 @@ MainWindow::MainWindow(st::Paths paths,
 
     settings_button_.signal_clicked().connect(
         sigc::mem_fun(*this, &MainWindow::on_settings));
+    world_info_button_.signal_clicked().connect(
+        sigc::mem_fun(*this, &MainWindow::on_world_info));
     backup_item_.signal_activate().connect(sigc::mem_fun(*this, &MainWindow::on_backup));
     restore_item_.signal_activate().connect(sigc::mem_fun(*this, &MainWindow::on_restore));
 
@@ -105,6 +115,24 @@ void MainWindow::on_settings() {
         st::log_write(st::LogLevel::Error, std::string("settings dialog failed: ") + error.what());
         status_.set_text(
             st::redact_secrets(std::string("Settings error: ") + error.what(), {settings_.api_key}));
+    }
+}
+
+void MainWindow::on_world_info() {
+    try {
+        WorldInfoDialog dialog(*this, paths_, settings_, [this]() {
+            chat_view_->refresh_settings();
+            status_.set_text("World Info saved");
+        });
+        if (!dialog.load_error().empty()) {
+            status_.set_text(st::redact_secrets(
+                std::string("World Info error: ") + dialog.load_error(), {settings_.api_key}));
+        }
+        dialog.run();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("world info dialog failed: ") + error.what());
+        status_.set_text(
+            st::redact_secrets(std::string("World Info error: ") + error.what(), {settings_.api_key}));
     }
 }
 
@@ -230,6 +258,313 @@ void MainWindow::on_restore() {
         return;
     }
     (void)restore_backup(id);
+}
+
+namespace {
+
+Gtk::Label* wi_label(const char* text) {
+    auto* label = Gtk::manage(new Gtk::Label(text));
+    label->set_halign(Gtk::ALIGN_START);
+    return label;
+}
+
+}  // namespace
+
+WorldInfoDialog::WorldInfoDialog(Gtk::Window& parent,
+                                 const st::Paths& paths,
+                                 st::Settings& settings,
+                                 std::function<void()> on_saved)
+    : Gtk::Dialog("World Info", parent, true),
+      paths_(paths),
+      settings_(settings),
+      on_saved_(std::move(on_saved)) {
+    add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    add_button("Save", Gtk::RESPONSE_OK);
+    set_default_response(Gtk::RESPONSE_OK);
+    set_default_size(520, 420);
+
+    list_.set_selection_mode(Gtk::SELECTION_SINGLE);
+    auto* scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    scroll->add(list_);
+
+    add_button_.set_label("Add");
+    edit_button_.set_label("Edit");
+    delete_button_.set_label("Delete");
+    import_button_.set_label("Import");
+    export_button_.set_label("Export");
+    add_button_.signal_clicked().connect(sigc::mem_fun(*this, &WorldInfoDialog::on_add_entry));
+    edit_button_.signal_clicked().connect(sigc::mem_fun(*this, &WorldInfoDialog::on_edit));
+    delete_button_.signal_clicked().connect(sigc::mem_fun(*this, &WorldInfoDialog::on_delete));
+    import_button_.signal_clicked().connect(sigc::mem_fun(*this, &WorldInfoDialog::on_import));
+    export_button_.signal_clicked().connect(sigc::mem_fun(*this, &WorldInfoDialog::on_export));
+
+    auto* buttons = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
+    buttons->pack_start(add_button_, false, false, 0);
+    buttons->pack_start(edit_button_, false, false, 0);
+    buttons->pack_start(delete_button_, false, false, 0);
+    buttons->pack_start(import_button_, false, false, 0);
+    buttons->pack_start(export_button_, false, false, 0);
+
+    auto* box = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL, 6));
+    box->pack_start(*scroll, true, true, 0);
+    box->pack_start(*buttons, false, false, 0);
+    box->set_margin_top(12);
+    box->set_margin_bottom(12);
+    box->set_margin_left(12);
+    box->set_margin_right(12);
+    get_content_area()->pack_start(*box, true, true, 0);
+
+    try {
+        load();
+    } catch (const std::exception& error) {
+        load_error_ = error.what();
+        st::log_write(st::LogLevel::Error, std::string("world info load failed: ") + error.what());
+    }
+    refresh_list();
+    show_all_children();
+    signal_response().connect(sigc::mem_fun(*this, &WorldInfoDialog::on_response));
+}
+
+std::filesystem::path WorldInfoDialog::book_path() const {
+    return safe_join(paths_.world_info_dir,
+                     sanitize_filename(settings_.world_info_book, "lorebook") + ".json");
+}
+
+void WorldInfoDialog::load() {
+    load_error_.clear();
+    book_ = st::WorldInfoBook{};
+    const std::filesystem::path path = book_path();
+    if (!file_exists(path)) {
+        refresh_list();
+        return;
+    }
+    const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "world info");
+    book_ = st::WorldInfoBook::from_json(parse_json(text, "world info"));
+    book_.name = sanitize_filename(settings_.world_info_book, "lorebook");
+    refresh_list();
+}
+
+void WorldInfoDialog::save() {
+    book_.name = sanitize_filename(settings_.world_info_book, "lorebook");
+    const std::filesystem::path path = book_path();
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) {
+        throw std::runtime_error("cannot create directory " + path.parent_path().string() + ": " +
+                                 error.message());
+    }
+    write_file_atomic(path, dump_json(book_.to_json(), 2) + "\n");
+    if (on_saved_) {
+        on_saved_();
+    }
+}
+
+void WorldInfoDialog::add_entry(const st::WorldInfoEntry& entry) {
+    book_.entries.push_back(entry);
+    refresh_list();
+}
+
+void WorldInfoDialog::refresh_list() {
+    for (Gtk::Widget* child : list_.get_children()) {
+        list_.remove(*child);
+    }
+    for (const st::WorldInfoEntry& entry : book_.entries) {
+        auto* row = Gtk::manage(new Gtk::ListBoxRow());
+        const std::string text = entry.key + " \xe2\x80\x94 " + entry.comment;
+        row->add(*Gtk::manage(new Gtk::Label(text)));
+        list_.append(*row);
+    }
+    list_.show_all();
+}
+
+namespace {
+
+bool edit_entry_dialog(Gtk::Window& parent, st::WorldInfoEntry& entry) {
+    Gtk::Dialog dialog("World Info entry", parent, true);
+    dialog.set_default_size(520, 380);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Save", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+
+    auto* grid = Gtk::manage(new Gtk::Grid());
+    grid->set_row_spacing(8);
+    grid->set_column_spacing(12);
+    grid->set_margin_top(12);
+    grid->set_margin_bottom(12);
+    grid->set_margin_left(12);
+    grid->set_margin_right(12);
+
+    auto* key = Gtk::manage(new Gtk::Entry());
+    key->set_text(entry.key);
+    auto* comment = Gtk::manage(new Gtk::Entry());
+    comment->set_text(entry.comment);
+    auto* content = Gtk::manage(new Gtk::TextView());
+    content->set_wrap_mode(Gtk::WRAP_WORD_CHAR);
+    content->get_buffer()->set_text(entry.content);
+    auto* content_scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    content_scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    content_scroll->set_size_request(-1, 120);
+    content_scroll->add(*content);
+    auto* enabled = Gtk::manage(new Gtk::CheckButton("Enabled"));
+    enabled->set_active(entry.enabled);
+    auto* position = Gtk::manage(new Gtk::SpinButton());
+    position->set_range(-100.0, 100.0);
+    position->set_increments(1.0, 1.0);
+    position->set_digits(0);
+    position->set_value(entry.position);
+    auto* depth = Gtk::manage(new Gtk::SpinButton());
+    depth->set_range(0.0, 100.0);
+    depth->set_increments(1.0, 1.0);
+    depth->set_digits(0);
+    depth->set_value(entry.depth);
+
+    int row = 0;
+    grid->attach(*wi_label("Key"), 0, row);
+    grid->attach(*key, 1, row++);
+    grid->attach(*wi_label("Comment"), 0, row);
+    grid->attach(*comment, 1, row++);
+    grid->attach(*wi_label("Content"), 0, row);
+    grid->attach(*content_scroll, 1, row++);
+    grid->attach(*wi_label("Enabled"), 0, row);
+    grid->attach(*enabled, 1, row++);
+    grid->attach(*wi_label("Position"), 0, row);
+    grid->attach(*position, 1, row++);
+    grid->attach(*wi_label("Depth"), 0, row);
+    grid->attach(*depth, 1, row++);
+
+    dialog.get_content_area()->pack_start(*grid, true, true, 0);
+    dialog.show_all();
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return false;
+    }
+    entry.key = key->get_text().raw();
+    entry.comment = comment->get_text().raw();
+    entry.content = content->get_buffer()->get_text().raw();
+    entry.enabled = enabled->get_active();
+    entry.position = position->get_value_as_int();
+    entry.depth = depth->get_value_as_int();
+    return true;
+}
+
+}  // namespace
+
+void WorldInfoDialog::on_add_entry() {
+    st::WorldInfoEntry entry;
+    if (edit_entry_dialog(*this, entry) && !entry.key.empty() && !entry.content.empty()) {
+        book_.entries.push_back(entry);
+        refresh_list();
+    }
+}
+
+void WorldInfoDialog::on_edit() {
+    Gtk::ListBoxRow* selected = list_.get_selected_row();
+    if (selected == nullptr) {
+        return;
+    }
+    const int index = selected->get_index();
+    if (index < 0 || static_cast<std::size_t>(index) >= book_.entries.size()) {
+        return;
+    }
+    st::WorldInfoEntry entry = book_.entries[static_cast<std::size_t>(index)];
+    if (edit_entry_dialog(*this, entry) && !entry.key.empty() && !entry.content.empty()) {
+        book_.entries[static_cast<std::size_t>(index)] = entry;
+        refresh_list();
+    }
+}
+
+void WorldInfoDialog::on_delete() {
+    Gtk::ListBoxRow* selected = list_.get_selected_row();
+    if (selected == nullptr) {
+        return;
+    }
+    const int index = selected->get_index();
+    if (index < 0 || static_cast<std::size_t>(index) >= book_.entries.size()) {
+        return;
+    }
+    book_.entries.erase(book_.entries.begin() + index);
+    refresh_list();
+}
+
+void WorldInfoDialog::on_import() {
+    Gtk::FileChooserDialog dialog(*this, "Import World Info", Gtk::FILE_CHOOSER_ACTION_OPEN);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Import", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::filesystem::path path = dialog.get_file()->get_path();
+    try {
+        const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "world info");
+        st::WorldInfoBook imported =
+            st::WorldInfoBook::from_json(parse_json(text, "world info"));
+        book_ = imported;
+        load_error_.clear();
+        refresh_list();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("world info import failed: ") + error.what());
+        load_error_ = error.what();
+        Gtk::MessageDialog message(*this, "World Info error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+void WorldInfoDialog::on_export() {
+    Gtk::FileChooserDialog dialog(*this, "Export World Info", Gtk::FILE_CHOOSER_ACTION_SAVE);
+    dialog.set_do_overwrite_confirmation(false);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Export", Gtk::RESPONSE_OK);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    dialog.set_current_name(sanitize_filename(settings_.world_info_book, "lorebook") + ".json");
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::filesystem::path path = dialog.get_file()->get_path();
+    if (file_exists(path)) {
+        Gtk::MessageDialog confirm("Overwrite " + path.filename().string() + "?",
+                                   false,
+                                   Gtk::MESSAGE_QUESTION,
+                                   Gtk::BUTTONS_OK_CANCEL,
+                                   true);
+        confirm.set_transient_for(*this);
+        confirm.set_secondary_text("The existing file will be replaced.");
+        if (confirm.run() != Gtk::RESPONSE_OK) {
+            return;
+        }
+    }
+    try {
+        write_file_atomic(path, dump_json(book_.to_json(), 2) + "\n");
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("world info export failed: ") + error.what());
+        Gtk::MessageDialog message(*this, "World Info error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
+}
+
+void WorldInfoDialog::on_response(int response) {
+    if (response != Gtk::RESPONSE_OK) {
+        hide();
+        return;
+    }
+    try {
+        save();
+        hide();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("world info save failed: ") + error.what());
+        load_error_ = error.what();
+        Gtk::MessageDialog message(*this, "World Info error", false,
+                                   Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
+        message.set_secondary_text(error.what());
+        message.run();
+    }
 }
 
 }  // namespace ui

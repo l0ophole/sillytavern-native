@@ -4,16 +4,56 @@
 #include "core/chat_store.h"
 #include "core/paths.h"
 #include "core/settings.h"
+#include "core/world_info.h"
 #include "ui/character_list.h"
 #include "ui/chat_view.h"
 
 #include <gtkmm.h>
 
+#include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 
 namespace st {
 namespace ui {
+
+class WorldInfoDialog : public Gtk::Dialog {
+public:
+    WorldInfoDialog(Gtk::Window& parent,
+                    const st::Paths& paths,
+                    st::Settings& settings,
+                    std::function<void()> on_saved);
+
+    void add_entry(const st::WorldInfoEntry& entry);
+    void save();
+    void load();
+    const st::WorldInfoBook& book() const { return book_; }
+    const std::string& load_error() const { return load_error_; }
+    std::filesystem::path book_path() const;
+
+private:
+    void refresh_list();
+    void on_add_entry();
+    void on_edit();
+    void on_delete();
+    void on_import();
+    void on_export();
+    void on_response(int response) override;
+
+    const st::Paths& paths_;
+    st::Settings& settings_;
+    std::function<void()> on_saved_;
+    st::WorldInfoBook book_;
+    std::string load_error_;
+
+    Gtk::ListBox list_;
+    Gtk::Button add_button_;
+    Gtk::Button edit_button_;
+    Gtk::Button delete_button_;
+    Gtk::Button import_button_;
+    Gtk::Button export_button_;
+};
 
 class MainWindow : public Gtk::Window {
 public:
@@ -29,6 +69,7 @@ public:
 private:
     void refresh_backup_menu();
     void on_settings();
+    void on_world_info();
     void on_character_selected(const st::CharacterEntry& entry);
     void on_backup();
     void on_restore();
@@ -40,6 +81,7 @@ private:
 
     Gtk::HeaderBar header_;
     Gtk::Button settings_button_;
+    Gtk::Button world_info_button_;
     Gtk::MenuButton menu_button_;
     Gtk::Menu backup_menu_;
     Gtk::MenuItem backup_item_;

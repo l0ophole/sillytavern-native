@@ -1,7 +1,9 @@
 #include "core/chat_session.h"
 
+#include "core/atomic_file.h"
 #include "core/context_budget.h"
 #include "core/identity.h"
+#include "core/names.h"
 
 #include <cctype>
 #include <chrono>
@@ -155,7 +157,7 @@ ChatSession::ChatSession(CharacterCard card,
       chat_(std::move(chat)) {}
 
 std::vector<PromptMessage> ChatSession::prompt_messages() const {
-    const PromptParts parts = build_prompt_parts(card_, settings_, chat_.messages);
+    const PromptParts parts = build_prompt_parts_with_book(card_, settings_, chat_.messages, world_info_book_);
 
     std::vector<PromptMessage> reserved = parts.leading_system;
     reserved.insert(reserved.end(), parts.trailing_system.begin(), parts.trailing_system.end());
@@ -179,6 +181,23 @@ std::vector<PromptMessage> ChatSession::prompt_messages() const {
     estimated_tokens_ = budget.estimated_tokens;
     trimmed_ = budget.trimmed;
     return messages;
+}
+
+void ChatSession::set_world_info_book(const WorldInfoBook& book) {
+    world_info_book_ = book;
+}
+
+void ChatSession::load_world_info_book(const std::filesystem::path& dir,
+                                       const std::string& book_name) {
+    world_info_book_ = WorldInfoBook{};
+    const std::string sanitized = sanitize_filename(book_name, "lorebook");
+    const std::filesystem::path path = safe_join(dir, sanitized + ".json");
+    if (!file_exists(path)) {
+        return;
+    }
+    const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "world info");
+    world_info_book_ = WorldInfoBook::from_json(parse_json(text, "world info"));
+    world_info_book_.name = sanitized;
 }
 
 OpenAiRequest ChatSession::request() const {

@@ -6,8 +6,10 @@
 #include "core/openai_client.h"
 #include "core/prompt.h"
 #include "core/settings.h"
+#include "core/world_info.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,6 +31,11 @@ public:
     Settings& settings() { return settings_; }
 
     std::vector<PromptMessage> prompt_messages() const;
+    void set_world_info_book(const WorldInfoBook& book);
+    const WorldInfoBook& world_info_book() const { return world_info_book_; }
+    // Loads worldinfo/<book>.json (sanitized, 16 MiB cap) from dir.
+    // Missing file leaves an empty book; parse/read errors throw.
+    void load_world_info_book(const std::filesystem::path& dir, const std::string& book_name);
     int estimated_tokens() const { return estimated_tokens_; }
     bool trimmed() const { return trimmed_; }
 
@@ -69,6 +76,7 @@ private:
     std::string character_;
     std::string filename_;
     Chat chat_;
+    WorldInfoBook world_info_book_;
     mutable int estimated_tokens_ = 0;
     mutable bool trimmed_ = false;
 };

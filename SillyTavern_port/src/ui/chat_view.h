@@ -4,7 +4,9 @@
 #include "core/character_store.h"
 #include "core/chat_store.h"
 #include "core/draft_throttle.h"
+#include "core/paths.h"
 #include "core/settings.h"
+#include "core/world_info.h"
 
 #include <gtkmm.h>
 #include <glibmm/dispatcher.h>
@@ -27,7 +29,8 @@ class ChatView : public Gtk::Box {
 public:
     ChatView(st::ChatStore& chats,
              st::Settings& settings,
-             std::function<void(const std::string&)> on_status);
+             std::function<void(const std::string&)> on_status,
+             const st::Paths* paths = nullptr);
     ~ChatView() override;
 
     bool set_character(const st::CharacterEntry& entry);
@@ -44,6 +47,8 @@ public:
     void on_regenerate();
     bool swipe_current(int delta);
     bool branch_from(std::size_t index);
+    void set_world_info_book(const st::WorldInfoBook& book);
+    const st::WorldInfoBook& world_info_book() const { return world_info_book_; }
 
 private:
     struct ChatLoadResult {
@@ -88,6 +93,8 @@ private:
 
     bool create_new_chat(bool announce);
     bool load_chat(const std::string& filename);
+    void load_world_info_book();
+    void apply_world_info_book();
     std::string new_chat_filename() const;
     void refresh_selector();
     void refresh_transcript();
@@ -102,6 +109,8 @@ private:
     st::ChatStore& chats_;
     st::Settings& settings_;
     std::function<void(const std::string&)> on_status_;
+    const st::Paths* paths_ = nullptr;
+    st::WorldInfoBook world_info_book_;
 
     st::CharacterCard card_;
     std::string character_key_;

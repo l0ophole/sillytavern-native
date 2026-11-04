@@ -72,11 +72,13 @@ std::string escape_markup_text(const std::string& text) {
 
 ChatView::ChatView(st::ChatStore& chats,
                    st::Settings& settings,
-                   std::function<void(const std::string&)> on_status)
+                   std::function<void(const std::string&)> on_status,
+                   const st::Paths* paths)
     : Gtk::Box(Gtk::ORIENTATION_VERTICAL, 6),
       chats_(chats),
       settings_(settings),
       on_status_(std::move(on_status)),
+      paths_(paths),
       composer_row_(Gtk::ORIENTATION_HORIZONTAL, 6),
       button_box_(Gtk::ORIENTATION_VERTICAL, 6) {
     set_margin_top(6);
@@ -191,6 +193,34 @@ ChatView::~ChatView() {
     stop_loading();
 }
 
+void ChatView::set_world_info_book(const st::WorldInfoBook& book) {
+    world_info_book_ = book;
+    apply_world_info_book();
+}
+
+void ChatView::apply_world_info_book() {
+    if (session_) {
+        session_->set_world_info_book(world_info_book_);
+    }
+}
+
+void ChatView::load_world_info_book() {
+    if (paths_ == nullptr) {
+        apply_world_info_book();
+        return;
+    }
+    try {
+        st::ChatSession probe(card_, settings_, chats_, character_key_, "", st::Chat{});
+        probe.load_world_info_book(paths_->world_info_dir, settings_.world_info_book);
+        world_info_book_ = probe.world_info_book();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("world info load failed: ") + error.what());
+        world_info_book_ = st::WorldInfoBook{};
+        set_status(std::string("World Info error: ") + error.what());
+    }
+    apply_world_info_book();
+}
+
 bool ChatView::set_character(const st::CharacterEntry& entry) {
     stop_streaming();
     stop_loading();
@@ -200,6 +230,7 @@ bool ChatView::set_character(const st::CharacterEntry& entry) {
     if (card_.name.empty()) {
         card_.name = character_name_;
     }
+    load_world_info_book();
     session_.reset();
     filename_.clear();
 
@@ -222,6 +253,7 @@ bool ChatView::set_character_async(const st::CharacterEntry& entry) {
     if (card_.name.empty()) {
         card_.name = character_name_;
     }
+    load_world_info_book();
     session_.reset();
     filename_.clear();
 
@@ -256,6 +288,7 @@ void ChatView::refresh_settings() {
         return;
     }
     session_->settings() = settings_;
+    load_world_info_book();
     refresh_transcript();
 }
 
@@ -982,6 +1015,7 @@ bool ChatView::create_new_chat(bool announce) {
         chats_.save(character_key_, filename_, chat);
         session_ = std::make_unique<st::ChatSession>(
             card_, settings_, chats_, character_key_, filename_, std::move(chat));
+        apply_world_info_book();
         refresh_selector();
         refresh_transcript();
         update_controls();
@@ -1050,6 +1084,7 @@ bool ChatView::apply_load_result(ChatLoadResult& result) {
         filename_ = result.filename;
         session_ = std::make_unique<st::ChatSession>(
             card_, settings_, chats_, character_key_, filename_, std::move(result.chat));
+        apply_world_info_book();
 
         if (!result.draft_error.empty()) {
             st::log_write(st::LogLevel::Error,

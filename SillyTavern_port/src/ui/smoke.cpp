@@ -1100,6 +1100,54 @@ int run_smoke_test() {
             std::cout << "smoke: backup round trip\n";
         }
 
+        {
+            st::Settings wi_settings = settings;
+            wi_settings.world_info_enabled = true;
+            wi_settings.world_info_book = "lorebook";
+            {
+                WorldInfoDialog dialog(window, paths, wi_settings, []() {});
+                dialog.show_all();
+                st::WorldInfoEntry dragon;
+                dragon.key = "dragon";
+                dragon.comment = "Dragon lore";
+                dragon.content = "Dragons hoard gold and breathe fire.";
+                dragon.enabled = true;
+                dialog.add_entry(dragon);
+                dialog.save();
+            }
+            {
+                WorldInfoDialog reopened(window, paths, wi_settings, []() {});
+                reopened.load();
+                if (reopened.book().entries.size() != std::size_t(1) ||
+                    reopened.book().entries[0].key != "dragon") {
+                    std::cerr << "smoke: world info round-trip failed\n";
+                    return 1;
+                }
+                st::Chat wi_chat = chats.create(entry.id,
+                                                  st::normalize_user_name(settings.user_name),
+                                                  entry.card.first_mes);
+                st::ChatSession wi_session(entry.card,
+                                           wi_settings,
+                                           chats,
+                                           entry.id,
+                                           "smoke-world-info.jsonl",
+                                           wi_chat);
+                wi_session.set_world_info_book(reopened.book());
+                wi_session.append_user("Tell me about the dragon.");
+                bool found_lore = false;
+                for (const st::PromptMessage& message : wi_session.prompt_messages()) {
+                    if (message.content.find("Dragons hoard gold") != std::string::npos) {
+                        found_lore = true;
+                    }
+                }
+                if (!found_lore) {
+                    std::cerr << "smoke: world info lore not in prompt\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: world info\n";
+        }
+
         window.hide();
         return 0;
     } catch (const std::exception& error) {
