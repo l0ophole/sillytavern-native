@@ -31,6 +31,7 @@ struct Settings {
     std::string context_template;
     bool world_info_enabled = false;
     std::string world_info_book = "lorebook";
+    std::string active_preset = "default";
     Json unknown = Json::object();
 
     static Settings load(const std::filesystem::path& path);

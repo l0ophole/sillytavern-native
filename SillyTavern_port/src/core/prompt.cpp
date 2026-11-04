@@ -144,14 +144,23 @@ PromptParts build_prompt_parts(const CharacterCard& card,
                                const std::vector<ChatMessage>& history,
                                const PersonaStore* persona_store) {
     return build_prompt_parts_with_book(card, settings, history, WorldInfoBook{},
-                                        persona_store);
+                                        persona_store, nullptr);
+}
+
+PromptParts build_prompt_parts(const CharacterCard& card,
+                               const Settings& settings,
+                               const std::vector<ChatMessage>& history,
+                               const PersonaStore* persona_store,
+                               const PromptManager* prompt_manager) {
+    return build_prompt_parts_with_book(card, settings, history, WorldInfoBook{},
+                                        persona_store, prompt_manager);
 }
 
 PromptParts build_prompt_parts_with_book(const CharacterCard& card,
                                          const Settings& settings,
                                          const std::vector<ChatMessage>& history,
                                          const WorldInfoBook& book) {
-    return build_prompt_parts_with_book(card, settings, history, book, nullptr);
+    return build_prompt_parts_with_book(card, settings, history, book, nullptr, nullptr);
 }
 
 PromptParts build_prompt_parts_with_book(const CharacterCard& card,
@@ -159,8 +168,167 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
                                          const std::vector<ChatMessage>& history,
                                          const WorldInfoBook& book,
                                          const PersonaStore* persona_store) {
+    return build_prompt_parts_with_book(card, settings, history, book, persona_store, nullptr);
+}
+
+PromptParts build_prompt_parts_with_book(const CharacterCard& card,
+                                         const Settings& settings,
+                                         const std::vector<ChatMessage>& history,
+                                         const WorldInfoBook& book,
+                                         const PersonaStore* persona_store,
+                                         const PromptManager* prompt_manager) {
     const std::string character = card.name.empty() ? "Character" : card.name;
     const std::string user = effective_user(settings, persona_store);
+
+    if (prompt_manager != nullptr) {
+        const std::vector<PromptSection> ordered = prompt_manager->enabled_sections();
+        auto find_section = [&ordered](const char* id) -> const PromptSection* {
+            for (const PromptSection& section : ordered) {
+                if (section.id == id) {
+                    return &section;
+                }
+            }
+            return nullptr;
+        };
+
+        PromptParts parts;
+        for (const ChatMessage& message : history) {
+            if (message.mes.empty()) {
+                continue;
+            }
+            const char* role =
+                message.is_system ? "system" : (message.is_user ? "user" : "assistant");
+            std::string content = expand_macros(message.mes, character, user);
+            if (settings.instruct_mode) {
+                content = format_instruct_message(role, content, settings.instruct_format);
+            }
+            parts.history.push_back(PromptMessage{role, std::move(content)});
+        }
+
+        std::string buffer;
+        auto flush_buffer = [&parts, &buffer]() {
+            if (!buffer.empty()) {
+                parts.leading_system.push_back(PromptMessage{"system", buffer});
+                buffer.clear();
+            }
+        };
+        auto section_text = [&](const PromptSection& section, const std::string& builtin) {
+            if (!section.content.empty()) {
+                return expand_macros(section.content, character, user);
+            }
+            return builtin;
+        };
+
+        for (const PromptSection& section : ordered) {
+            if (section.id == "system") {
+                if (!section.content.empty()) {
+                    append_section(buffer, expand_macros(section.content, character, user));
+                } else if (settings.instruct_mode && !settings.context_template.empty()) {
+                    append_section(buffer,
+                                   expand_macros(settings.context_template, character, user));
+                    if (!card.system_prompt.empty()) {
+                        append_section(buffer,
+                                       expand_macros(card.system_prompt, character, user));
+                    }
+                } else {
+                    const std::string& base_prompt = card.system_prompt.empty()
+                                                         ? settings.system_prompt
+                                                         : card.system_prompt;
+                    append_section(buffer, expand_macros(base_prompt, character, user));
+                }
+            } else if (section.id == "description") {
+                append_section(buffer,
+                               section_text(section, expand_macros(card.description, character,
+                                                                   user)));
+            } else if (section.id == "personality") {
+                std::string builtin;
+                if (!card.personality.empty()) {
+                    builtin = expand_macros(character + "'s personality: " + card.personality,
+                                            character, user);
+                }
+                append_section(buffer, section_text(section, std::move(builtin)));
+            } else if (section.id == "scenario") {
+                std::string builtin;
+                if (!card.scenario.empty()) {
+                    builtin = expand_macros("Scenario: " + card.scenario, character, user);
+                }
+                append_section(buffer, section_text(section, std::move(builtin)));
+            } else if (section.id == "examples") {
+                std::string builtin;
+                if (!card.mes_example.empty()) {
+                    builtin = expand_macros("Example dialogues:\n" + card.mes_example, character,
+                                            user);
+                }
+                append_section(buffer, section_text(section, std::move(builtin)));
+            } else if (section.id == "world_info") {
+                flush_buffer();
+                if (!section.content.empty()) {
+                    parts.leading_system.push_back(PromptMessage{
+                        "system", expand_macros(section.content, character, user)});
+                } else if (!book.entries.empty()) {
+                    std::vector<std::string> texts;
+                    for (const ChatMessage& message : history) {
+                        if (!message.mes.empty()) {
+                            texts.push_back(message.mes);
+                        }
+                    }
+                    const std::vector<WorldInfoEntry> hits = triggered_entries(book, texts);
+                    if (!hits.empty()) {
+                        std::string joined;
+                        for (const WorldInfoEntry& entry : hits) {
+                            if (!joined.empty()) {
+                                joined += "\n\n";
+                            }
+                            joined += entry.content;
+                        }
+                        if (!joined.empty()) {
+                            parts.leading_system.push_back(
+                                PromptMessage{"system", "World Info:\n" + joined});
+                        }
+                    }
+                }
+            } else if (section.id == "persona") {
+                flush_buffer();
+                if (!section.content.empty()) {
+                    parts.leading_system.push_back(PromptMessage{
+                        "system", expand_macros(section.content, character, user)});
+                } else if (persona_store != nullptr) {
+                    if (const Persona* active = persona_store->active()) {
+                        if (!active->description.empty()) {
+                            const std::string expanded =
+                                expand_macros(active->description, character, user);
+                            if (!expanded.empty()) {
+                                parts.leading_system.push_back(PromptMessage{
+                                    "system", "User persona (" + active->name + "): " + expanded});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        flush_buffer();
+
+        if (const PromptSection* authors = find_section("authors_note")) {
+            const std::string note = section_text(*authors,
+                                                  expand_macros(settings.authors_note, character,
+                                                                user));
+            if (!note.empty()) {
+                insert_at_depth(parts.history, PromptMessage{"system", note},
+                                settings.authors_note_depth);
+            }
+        }
+        if (const PromptSection* post = find_section("post_history")) {
+            std::string builtin;
+            if (!card.post_history_instructions.empty()) {
+                builtin = expand_macros(card.post_history_instructions, character, user);
+            }
+            const std::string text = section_text(*post, std::move(builtin));
+            if (!text.empty()) {
+                parts.trailing_system.push_back(PromptMessage{"system", text});
+            }
+        }
+        return parts;
+    }
 
     std::string system_text;
     if (settings.instruct_mode && !settings.context_template.empty()) {

@@ -105,13 +105,16 @@ Settings Settings::from_json(const Json& value) {
     if (value.contains("world_info_book") && value["world_info_book"].is_string()) {
         settings.world_info_book = value["world_info_book"].get<std::string>();
     }
+    if (value.contains("active_preset") && value["active_preset"].is_string()) {
+        settings.active_preset = value["active_preset"].get<std::string>();
+    }
 
     for (const char* key : {"api_base_url", "api_key", "model", "temperature", "top_p",
                             "max_tokens", "context_size", "user_name", "persona_name", "system_prompt",
                             "stream", "request_timeout_seconds", "last_character", "last_chat",
                             "authors_note_enabled", "authors_note", "authors_note_depth",
                             "instruct_mode", "instruct_format", "context_template",
-                            "world_info_enabled", "world_info_book"}) {
+                            "world_info_enabled", "world_info_book", "active_preset"}) {
         erase_known(settings.unknown, key);
     }
 
@@ -172,6 +175,7 @@ Json Settings::to_json() const {
     value["context_template"] = context_template;
     value["world_info_enabled"] = world_info_enabled;
     value["world_info_book"] = world_info_book;
+    value["active_preset"] = active_preset;
     return value;
 }
 
@@ -200,6 +204,7 @@ void Settings::validate() {
         persona_name = trim(persona_name);
     }
     world_info_book = sanitize_filename(world_info_book, "lorebook");
+    active_preset = sanitize_filename(active_preset, "default");
     authors_note_depth = std::clamp(authors_note_depth, 0, 100);
     if (authors_note.size() > 4096) {
         authors_note.resize(4096);
