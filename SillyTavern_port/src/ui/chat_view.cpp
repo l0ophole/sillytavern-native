@@ -196,6 +196,7 @@ bool ChatView::set_character_async(const st::CharacterEntry& entry) {
 void ChatView::clear() {
     stop_streaming();
     stop_loading();
+    draft_replace_last_ = false;
     session_.reset();
     filename_.clear();
     character_key_.clear();
@@ -219,6 +220,7 @@ void ChatView::on_send() {
     if (!session_ || streaming_ || loading_) {
         return;
     }
+    draft_replace_last_ = false;
 
     Glib::RefPtr<Gtk::TextBuffer> buffer = composer_view_.get_buffer();
     const std::string text = buffer->get_text().raw();
@@ -547,11 +549,21 @@ void ChatView::on_regenerate() {
         return;
     }
     regenerate_backup_ = before;
+    // The regenerate pop makes base_messages_ the post-pop size; drafts
+    // captured during this generation must replace the last assistant
+    // message on recovery, never append a second one.
+    base_messages_ = session_->chat().messages.size();
+    draft_replace_last_ = true;
     refresh_transcript();
     if (!start_generation(session_->request())) {
         session_->restore(*regenerate_backup_);
         regenerate_backup_.reset();
+        draft_replace_last_ = false;
         refresh_transcript();
+    } else {
+        // start_generation resets draft_replace_last_; re-assert it for
+        // the regeneration path.
+        draft_replace_last_ = true;
     }
 }
 
@@ -559,6 +571,7 @@ void ChatView::on_continue() {
     if (!session_ || streaming_ || loading_) {
         return;
     }
+    draft_replace_last_ = false;
     if (!session_->can_continue()) {
         set_status("Nothing to continue");
         return;
@@ -576,8 +589,8 @@ bool ChatView::start_generation(st::OpenAiRequest request, bool continue_mode) {
     streaming_text_.clear();
     draft_send_date_ = utc_now();
     base_messages_ = session_ ? session_->chat().messages.size() : 0;
-    draft_saved_ = false;
-    last_draft_save_ = std::chrono::steady_clock::time_point{};
+    draft_replace_last_ = false;
+    draft_throttle_.reset();
     update_controls();
     set_status("Generating...");
 
@@ -684,7 +697,7 @@ void ChatView::maybe_save_draft() {
     }
 
     const auto now = std::chrono::steady_clock::now();
-    if (draft_saved_ && now - last_draft_save_ < std::chrono::seconds(1)) {
+    if (!draft_throttle_.should_attempt(now)) {
         return;
     }
 
@@ -693,14 +706,15 @@ void ChatView::maybe_save_draft() {
     draft.continue_mode = continue_mode_;
     draft.send_date = draft_send_date_;
     draft.base_messages = base_messages_;
+    draft.replace_last = draft_replace_last_;
     try {
         chats_.save_draft(character_key_, filename_, draft);
+        draft_throttle_.note_saved(now);
     } catch (const std::exception& error) {
         st::log_write(st::LogLevel::Error,
                       std::string("chat draft save failed: ") + error.what());
+        draft_throttle_.note_failed(now);
     }
-    draft_saved_ = true;
-    last_draft_save_ = now;
 }
 
 void ChatView::stop_streaming() {
@@ -972,14 +986,13 @@ std::string ChatView::new_chat_filename() const {
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M-%S", &utc);
 
     const std::string base(buffer);
-    std::string candidate = base + ".jsonl";
-    const std::vector<std::string> existing = chats_.list(character_key_);
+    std::string result = base + ".jsonl";
     int suffix = 2;
-    while (std::find(existing.begin(), existing.end(), candidate) != existing.end()) {
-        candidate = base + "-" + std::to_string(suffix) + ".jsonl";
+    while (chats_.exists(character_key_, result)) {
+        result = base + "-" + std::to_string(suffix) + ".jsonl";
         ++suffix;
     }
-    return candidate;
+    return result;
 }
 
 void ChatView::refresh_selector() {

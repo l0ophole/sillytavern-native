@@ -117,7 +117,26 @@ void ChatSession::append_assistant(const std::string& text) {
 }
 
 bool ChatSession::recover_draft(const ChatDraft& draft) {
-    if (draft.text.empty() || draft.base_messages != chat_.messages.size()) {
+    if (draft.text.empty()) {
+        return false;
+    }
+    if (draft.replace_last) {
+        if (chat_.messages.empty() ||
+            draft.base_messages != chat_.messages.size() - 1) {
+            return false;
+        }
+        const ChatMessage& last = chat_.messages.back();
+        if (last.is_user || last.is_system) {
+            return false;
+        }
+        ChatMessage& target = chat_.messages.back();
+        target.mes = draft.text;
+        if (!draft.send_date.empty()) {
+            target.send_date = draft.send_date;
+        }
+        return true;
+    }
+    if (draft.base_messages != chat_.messages.size()) {
         return false;
     }
     if (draft.continue_mode && can_continue()) {

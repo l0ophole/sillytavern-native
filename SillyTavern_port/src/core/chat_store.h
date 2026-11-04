@@ -15,6 +15,7 @@ struct ChatDraft {
     bool continue_mode = false;
     std::string send_date;
     std::size_t base_messages = 0;
+    bool replace_last = false;
 };
 
 class ChatStore {
@@ -45,6 +46,7 @@ public:
                 const std::string& from,
                 const std::string& to) const;
     void remove(const std::string& character, const std::string& filename) const;
+    bool exists(const std::string& character, const std::string& filename) const;
 
     const std::filesystem::path& root() const { return chats_root_; }
 

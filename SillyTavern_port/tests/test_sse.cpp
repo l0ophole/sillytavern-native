@@ -104,3 +104,30 @@ TEST(sse_feed_bytes_handles_embedded_nul) {
     CHECK_EQ(events.size(), std::size_t(1));
     CHECK_EQ(events[0].data, std::string("a\0b", 3));
 }
+
+TEST(sse_incremental_scan_handles_line_split_across_many_feeds) {
+    st::SseParser parser;
+    std::string body;
+    for (int i = 0; i < 256; ++i) {
+        parser.feed(std::string(4096, 'a'));
+        body.append(4096, 'a');
+    }
+    CHECK_EQ(body.size(), std::size_t(256 * 4096));
+    const auto events = parser.feed(": value\n\ndata: done\n\n");
+    CHECK(!parser.failed());
+    CHECK_EQ(events.size(), std::size_t(1));
+    if (events.size() == 1) {
+        CHECK_EQ(events[0].data, "done");
+    }
+}
+
+TEST(sse_incremental_scan_oversized_unterminated_line_still_fails) {
+    st::SseParser parser;
+    const std::string chunk(1024 * 1024, 'a');
+    for (int i = 0; i < 17; ++i) {
+        (void)parser.feed(chunk);
+    }
+    CHECK(parser.failed());
+    CHECK(parser.error().find("exceeds") != std::string::npos);
+    CHECK(parser.finish().empty());
+}

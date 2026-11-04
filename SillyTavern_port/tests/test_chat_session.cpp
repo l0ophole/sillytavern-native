@@ -425,6 +425,108 @@ TEST(session_recover_draft_rejects_stale_base) {
     CHECK(session.chat().messages.back().is_user);
 }
 
+TEST(chat_session_replaces_last_message_on_regenerate_recovery) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.send_date = "2026-11-01T00:00:01Z";
+    user.mes = "Hi";
+    st::ChatMessage assistant;
+    assistant.name = "Seraphina";
+    assistant.is_user = false;
+    assistant.is_system = false;
+    assistant.send_date = "2026-11-01T00:00:02Z";
+    assistant.mes = "old";
+    chat.messages = {user, assistant};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    st::ChatDraft draft;
+    draft.text = "new";
+    draft.send_date = "2026-11-01T00:00:03Z";
+    draft.base_messages = 1;
+    draft.replace_last = true;
+    CHECK(session.recover_draft(draft));
+    CHECK_EQ(session.chat().messages.size(), 2u);
+    CHECK_EQ(session.chat().messages.back().mes, "new");
+    CHECK_EQ(session.chat().messages.back().send_date, "2026-11-01T00:00:03Z");
+    CHECK_EQ(session.chat().messages.front().mes, "Hi");
+}
+
+TEST(chat_session_rejects_regenerate_draft_when_base_is_stale) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage user;
+    user.name = "Traveler";
+    user.is_user = true;
+    user.send_date = "2026-11-01T00:00:01Z";
+    user.mes = "Hi";
+    st::ChatMessage assistant_old;
+    assistant_old.name = "Seraphina";
+    assistant_old.send_date = "2026-11-01T00:00:02Z";
+    assistant_old.mes = "old";
+    st::ChatMessage assistant_second;
+    assistant_second.name = "Seraphina";
+    assistant_second.send_date = "2026-11-01T00:00:03Z";
+    assistant_second.mes = "second";
+    chat.messages = {user, assistant_old, assistant_second};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    st::ChatDraft draft;
+    draft.text = "new";
+    draft.send_date = "2026-11-01T00:00:04Z";
+    draft.base_messages = 1;
+    draft.replace_last = true;
+    CHECK(!session.recover_draft(draft));
+    CHECK_EQ(session.chat().messages.size(), 3u);
+    CHECK_EQ(session.chat().messages.back().mes, "second");
+    CHECK_EQ(session.chat().messages.back().send_date, "2026-11-01T00:00:03Z");
+    CHECK_EQ(session.chat().messages[1].mes, "old");
+
+    // Also rejects when the last message is not an assistant.
+    st::Chat user_tail;
+    user_tail.metadata.user_name = "Traveler";
+    user_tail.metadata.character_name = "Seraphina";
+    user_tail.metadata.create_date = "2026-11-01T00:00:00Z";
+    user_tail.messages = {user, assistant_old, user};
+    st::ChatSession tail_session(make_card(), settings, store, "Seraphina", "tail.jsonl", user_tail);
+    st::ChatDraft tail_draft;
+    tail_draft.text = "new";
+    tail_draft.base_messages = 2;
+    tail_draft.replace_last = true;
+    CHECK(!tail_session.recover_draft(tail_draft));
+    CHECK_EQ(tail_session.chat().messages.size(), 3u);
+    CHECK_EQ(tail_session.chat().messages.back().mes, "Hi");
+
+    // Also rejects an empty draft.
+    st::Chat two;
+    two.metadata.user_name = "Traveler";
+    two.metadata.character_name = "Seraphina";
+    two.metadata.create_date = "2026-11-01T00:00:00Z";
+    two.messages = {user, assistant_old};
+    st::ChatSession empty_session(make_card(), settings, store, "Seraphina", "empty.jsonl", two);
+    st::ChatDraft empty_draft;
+    empty_draft.text = "";
+    empty_draft.base_messages = 1;
+    empty_draft.replace_last = true;
+    CHECK(!empty_session.recover_draft(empty_draft));
+    CHECK_EQ(empty_session.chat().messages.size(), 2u);
+    CHECK_EQ(empty_session.chat().messages.back().mes, "old");
+}
+
 TEST(session_continue_requires_assistant_tail) {
     TempDir temp;
     st::ChatStore store(temp.path());

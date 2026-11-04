@@ -5,6 +5,7 @@
 #include "core/names.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <ctime>
 #include <stdexcept>
@@ -112,7 +113,12 @@ void ChatStore::save_draft(const std::string& character,
     value["continue_mode"] = draft.continue_mode;
     value["send_date"] = draft.send_date;
     value["base_messages"] = draft.base_messages;
-    write_file_atomic(draft_path(character, filename), dump_json(value) + "\n");
+    value["replace_last"] = draft.replace_last;
+    const std::string payload = dump_json(value) + "\n";
+    if (payload.size() > kMaxDraftBytes) {
+        throw std::runtime_error("chat draft exceeds 16 MiB limit");
+    }
+    write_file_atomic(draft_path(character, filename), payload);
 }
 
 std::optional<ChatDraft> ChatStore::load_draft(const std::string& character,
@@ -142,12 +148,18 @@ std::optional<ChatDraft> ChatStore::load_draft(const std::string& character,
         throw std::runtime_error("chat draft " + filename + ": invalid base_messages");
     }
 
+    if (value.contains("replace_last") && !value["replace_last"].is_boolean()) {
+        throw std::runtime_error("chat draft " + filename + ": invalid replace_last");
+    }
+
     ChatDraft draft;
     draft.text = value["text"].get<std::string>();
     draft.continue_mode = value["continue_mode"].get<bool>();
     draft.send_date = value["send_date"].get<std::string>();
     draft.base_messages =
         static_cast<std::size_t>(value["base_messages"].get<long long>());
+    draft.replace_last =
+        value.contains("replace_last") && value["replace_last"].get<bool>();
     return draft;
 }
 
@@ -295,6 +307,16 @@ void ChatStore::rename(const std::string& character,
     }
 
     std::error_code error;
+    const fs::path from_draft = draft_path(character, from);
+    const fs::path to_draft = draft_path(character, to);
+    if (fs::exists(from_draft, error)) {
+        std::error_code draft_error;
+        fs::rename(from_draft, to_draft, draft_error);
+        if (draft_error) {
+            throw std::runtime_error("cannot rename chat " + from + " to " + to + ": " +
+                                     draft_error.message());
+        }
+    }
     fs::rename(from_path, to_path, error);
     if (error) {
         throw std::runtime_error("cannot rename chat " + from + " to " + to + ": " + error.message());
@@ -312,6 +334,21 @@ void ChatStore::remove(const std::string& character, const std::string& filename
     if (error) {
         throw std::runtime_error("cannot remove chat " + filename + ": " + error.message());
     }
+    std::error_code draft_error;
+    fs::remove(draft_path(character, filename), draft_error);
+    if (draft_error && draft_error.value() != ENOENT) {
+        throw std::runtime_error("cannot remove chat draft " + filename + ": " +
+                                 draft_error.message());
+    }
+}
+
+bool ChatStore::exists(const std::string& character, const std::string& filename) const {
+    std::error_code error;
+    if (fs::exists(safe_join(chat_dir(character), filename), error)) {
+        return true;
+    }
+    error.clear();
+    return fs::exists(draft_path(character, filename), error);
 }
 
 }  // namespace st
