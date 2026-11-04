@@ -107,6 +107,22 @@ std::string expand_macros(const std::string& text,
     return result;
 }
 
+std::string format_instruct_message(const std::string& role,
+                                    const std::string& content,
+                                    const std::string& format) {
+    if (format == "chatml") {
+        return "<|im_start|>" + role + "\n" + content + "<|im_end|>\n";
+    }
+    if (format == "llama") {
+        if (role == "user") {
+            return "[INST] " + content + " [/INST]\n";
+        }
+        return content + "\n";
+    }
+    // "plain" and any unknown format: content unchanged.
+    return content;
+}
+
 void insert_at_depth(std::vector<PromptMessage>& history,
                      const PromptMessage& note,
                      int depth) {
@@ -147,9 +163,19 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
     const std::string user = effective_user(settings, persona_store);
 
     std::string system_text;
-    const std::string& base_prompt =
-        card.system_prompt.empty() ? settings.system_prompt : card.system_prompt;
-    append_section(system_text, expand_macros(base_prompt, character, user));
+    if (settings.instruct_mode && !settings.context_template.empty()) {
+        // Template replaces the default leading system text; the character
+        // system prompt, if set, is still appended after it (template first).
+        append_section(system_text,
+                       expand_macros(settings.context_template, character, user));
+        if (!card.system_prompt.empty()) {
+            append_section(system_text, expand_macros(card.system_prompt, character, user));
+        }
+    } else {
+        const std::string& base_prompt =
+            card.system_prompt.empty() ? settings.system_prompt : card.system_prompt;
+        append_section(system_text, expand_macros(base_prompt, character, user));
+    }
     append_section(system_text, expand_macros(card.description, character, user));
     if (!card.personality.empty()) {
         append_section(system_text,
@@ -189,7 +215,11 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
             continue;
         }
         const char* role = message.is_system ? "system" : (message.is_user ? "user" : "assistant");
-        parts.history.push_back(PromptMessage{role, expand_macros(message.mes, character, user)});
+        std::string content = expand_macros(message.mes, character, user);
+        if (settings.instruct_mode) {
+            content = format_instruct_message(role, content, settings.instruct_format);
+        }
+        parts.history.push_back(PromptMessage{role, std::move(content)});
     }
 
     if (settings.authors_note_enabled) {

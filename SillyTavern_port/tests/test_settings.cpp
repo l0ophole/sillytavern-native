@@ -134,6 +134,45 @@ TEST(settings_world_info_round_trips) {
     CHECK_EQ(empty.world_info_book, "lorebook");
 }
 
+TEST(settings_instruct_defaults_unchanged) {
+    TempDir temp;
+    const auto settings = st::Settings::load(temp.path() / "settings.json");
+    CHECK(!settings.instruct_mode);
+    CHECK_EQ(settings.instruct_format, "plain");
+    CHECK(settings.context_template.empty());
+
+    const auto file = temp.path() / "settings.json";
+    auto round = st::Settings::load(file);
+    round.instruct_mode = true;
+    round.instruct_format = "chatml";
+    round.context_template = "Template {{char}}";
+    round.save(file);
+    const auto loaded = st::Settings::load(file);
+    CHECK(loaded.instruct_mode);
+    CHECK_EQ(loaded.instruct_format, "chatml");
+    CHECK_EQ(loaded.context_template, "Template {{char}}");
+}
+
+TEST(instruct_unknown_format_clamps_to_plain) {
+    st::Settings settings;
+    settings.instruct_format = "bogus";
+    settings.context_template = std::string(9000, 'x');
+    settings.validate();
+    CHECK_EQ(settings.instruct_format, "plain");
+
+    st::Settings chatml;
+    chatml.instruct_format = "chatml";
+    chatml.validate();
+    CHECK_EQ(chatml.instruct_format, "chatml");
+
+    st::Settings llama;
+    llama.instruct_format = "llama";
+    llama.validate();
+    CHECK_EQ(llama.instruct_format, "llama");
+
+    CHECK_EQ(settings.context_template.size(), std::size_t(8192));
+}
+
 TEST(settings_persona_name_round_trips_and_truncates) {
     TempDir temp;
     const auto file = temp.path() / "settings.json";

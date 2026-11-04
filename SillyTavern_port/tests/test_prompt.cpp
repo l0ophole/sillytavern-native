@@ -243,6 +243,99 @@ TEST(prompt_injects_world_info_once) {
           std::string::npos);
 }
 
+TEST(instruct_chatml_wraps_history) {
+    CHECK_EQ(st::format_instruct_message("user", "Hi", "plain"), "Hi");
+    CHECK_EQ(st::format_instruct_message("user", "Hi", "bogus"), "Hi");
+    CHECK_EQ(st::format_instruct_message("user", "Hi", "chatml"),
+             "<|im_start|>user\nHi<|im_end|>\n");
+    CHECK_EQ(st::format_instruct_message("assistant", "Hello", "chatml"),
+             "<|im_start|>assistant\nHello<|im_end|>\n");
+
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.instruct_mode = true;
+    settings.instruct_format = "chatml";
+    st::ChatMessage user;
+    user.name = "Alice";
+    user.is_user = true;
+    user.mes = "Hi";
+    st::ChatMessage bot;
+    bot.name = "Seraphina";
+    bot.mes = "Hello";
+
+    const auto parts = st::build_prompt_parts(card, settings, {user, bot});
+    CHECK_EQ(parts.history.size(), std::size_t(2));
+    CHECK_EQ(parts.history[0].content, "<|im_start|>user\nHi<|im_end|>\n");
+    CHECK_EQ(parts.history[1].content, "<|im_start|>assistant\nHello<|im_end|>\n");
+
+    // Defaults (instruct off) leave history untouched.
+    settings.instruct_mode = false;
+    const auto plain_parts = st::build_prompt_parts(card, settings, {user, bot});
+    CHECK_EQ(plain_parts.history[0].content, "Hi");
+    CHECK_EQ(plain_parts.history[1].content, "Hello");
+}
+
+TEST(instruct_llama_wraps_user_only) {
+    CHECK_EQ(st::format_instruct_message("user", "Hi", "llama"), "[INST] Hi [/INST]\n");
+    CHECK_EQ(st::format_instruct_message("assistant", "Hello", "llama"), "Hello\n");
+    CHECK_EQ(st::format_instruct_message("system", "Narrate", "llama"), "Narrate\n");
+
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.instruct_mode = true;
+    settings.instruct_format = "llama";
+    st::ChatMessage user;
+    user.name = "Alice";
+    user.is_user = true;
+    user.mes = "Hi";
+    st::ChatMessage bot;
+    bot.name = "Seraphina";
+    bot.mes = "Hello";
+    st::ChatMessage system;
+    system.name = "System";
+    system.is_system = true;
+    system.mes = "Narrate";
+
+    const auto parts = st::build_prompt_parts(card, settings, {user, bot, system});
+    CHECK_EQ(parts.history.size(), std::size_t(3));
+    CHECK_EQ(parts.history[0].content, "[INST] Hi [/INST]\n");
+    CHECK_EQ(parts.history[1].content, "Hello\n");
+    CHECK_EQ(parts.history[2].content, "Narrate\n");
+}
+
+TEST(context_template_replaces_leading) {
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    card.system_prompt = "Character prompt.";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.system_prompt = "Global prompt.";
+    settings.instruct_mode = true;
+    settings.instruct_format = "plain";
+    settings.context_template = "Template for {{char}} and {{user}}";
+
+    const auto parts = st::build_prompt_parts(card, settings, {});
+    CHECK(!parts.leading_system.empty());
+    CHECK_EQ(parts.leading_system[0].content,
+             "Template for Seraphina and Alice\n\nCharacter prompt.");
+    CHECK(parts.leading_system[0].content.find("Global prompt.") == std::string::npos);
+
+    // Without instruct mode the template must not replace the default prompt.
+    settings.instruct_mode = false;
+    const auto default_parts = st::build_prompt_parts(card, settings, {});
+    CHECK_EQ(default_parts.leading_system[0].content, "Character prompt.");
+
+    // Empty template keeps the default prompt even in instruct mode.
+    settings.instruct_mode = true;
+    settings.context_template = "";
+    const auto empty_parts = st::build_prompt_parts(card, settings, {});
+    CHECK_EQ(empty_parts.leading_system[0].content, "Character prompt.");
+}
+
 TEST(prompt_world_info_absent_when_disabled) {
     st::CharacterCard card;
     card.name = "Seraphina";

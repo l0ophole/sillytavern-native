@@ -26,6 +26,10 @@ std::string expand_macros(const std::string& text,
                           const std::string& character,
                           const std::string& user);
 
+std::string format_instruct_message(const std::string& role,
+                                    const std::string& content,
+                                    const std::string& format);
+
 void insert_at_depth(std::vector<PromptMessage>& history,
                      const PromptMessage& note,
                      int depth);
