@@ -49,6 +49,36 @@ void append_section(std::string& target, const std::string& section) {
     target += section;
 }
 
+std::string trim_text(const std::string& text) {
+    const auto first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return {};
+    }
+    const auto last = text.find_last_not_of(" \t\r\n");
+    return text.substr(first, last - first + 1);
+}
+
+// Resolved {{user}} value: the active persona name wins; otherwise a
+// non-empty Settings::persona_name; otherwise normalized settings.user_name.
+// An explicitly supplied (possibly empty) PersonaStore means "in use" only
+// when it has an active persona.
+std::string effective_user(const Settings& settings, const PersonaStore* persona_store) {
+    if (persona_store != nullptr) {
+        if (const Persona* active = persona_store->active()) {
+            if (!active->name.empty()) {
+                return active->name;
+            }
+        }
+        // Store in use without an active persona: keep legacy behavior,
+        // falling back to settings.persona_name below.
+    }
+    const std::string persona_name = trim_text(settings.persona_name);
+    if (!persona_name.empty()) {
+        return persona_name;
+    }
+    return normalize_user_name(settings.user_name);
+}
+
 }  // namespace
 
 std::string expand_macros(const std::string& text,
@@ -90,15 +120,31 @@ void insert_at_depth(std::vector<PromptMessage>& history,
 PromptParts build_prompt_parts(const CharacterCard& card,
                                const Settings& settings,
                                const std::vector<ChatMessage>& history) {
-    return build_prompt_parts_with_book(card, settings, history, WorldInfoBook{});
+    return build_prompt_parts_with_book(card, settings, history, WorldInfoBook{}, nullptr);
+}
+
+PromptParts build_prompt_parts(const CharacterCard& card,
+                               const Settings& settings,
+                               const std::vector<ChatMessage>& history,
+                               const PersonaStore* persona_store) {
+    return build_prompt_parts_with_book(card, settings, history, WorldInfoBook{},
+                                        persona_store);
 }
 
 PromptParts build_prompt_parts_with_book(const CharacterCard& card,
                                          const Settings& settings,
                                          const std::vector<ChatMessage>& history,
                                          const WorldInfoBook& book) {
+    return build_prompt_parts_with_book(card, settings, history, book, nullptr);
+}
+
+PromptParts build_prompt_parts_with_book(const CharacterCard& card,
+                                         const Settings& settings,
+                                         const std::vector<ChatMessage>& history,
+                                         const WorldInfoBook& book,
+                                         const PersonaStore* persona_store) {
     const std::string character = card.name.empty() ? "Character" : card.name;
-    const std::string user = normalize_user_name(settings.user_name);
+    const std::string user = effective_user(settings, persona_store);
 
     std::string system_text;
     const std::string& base_prompt =
@@ -123,6 +169,19 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
     PromptParts parts;
     if (!system_text.empty()) {
         parts.leading_system.push_back(PromptMessage{"system", std::move(system_text)});
+    }
+
+    if (persona_store != nullptr) {
+        if (const Persona* active = persona_store->active()) {
+            if (!active->description.empty()) {
+                const std::string expanded =
+                    expand_macros(active->description, character, user);
+                if (!expanded.empty()) {
+                    parts.leading_system.push_back(PromptMessage{
+                        "system", "User persona (" + active->name + "): " + expanded});
+                }
+            }
+        }
     }
 
     for (const ChatMessage& message : history) {
@@ -176,7 +235,14 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
 std::vector<PromptMessage> build_prompt(const CharacterCard& card,
                                         const Settings& settings,
                                         const std::vector<ChatMessage>& history) {
-    PromptParts parts = build_prompt_parts(card, settings, history);
+    return build_prompt(card, settings, history, nullptr);
+}
+
+std::vector<PromptMessage> build_prompt(const CharacterCard& card,
+                                        const Settings& settings,
+                                        const std::vector<ChatMessage>& history,
+                                        const PersonaStore* persona_store) {
+    PromptParts parts = build_prompt_parts(card, settings, history, persona_store);
 
     std::vector<PromptMessage> messages;
     messages.reserve(parts.leading_system.size() + parts.history.size() +

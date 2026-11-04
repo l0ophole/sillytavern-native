@@ -16,6 +16,7 @@ struct Settings {
     int max_tokens = 300;
     int context_size = 4095;
     std::string user_name = "User";
+    std::string persona_name = "";
     std::string system_prompt =
         "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}.";
     bool stream = true;

@@ -133,3 +133,24 @@ TEST(settings_world_info_round_trips) {
     empty.validate();
     CHECK_EQ(empty.world_info_book, "lorebook");
 }
+
+TEST(settings_persona_name_round_trips_and_truncates) {
+    TempDir temp;
+    const auto file = temp.path() / "settings.json";
+    auto settings = st::Settings::load(file);
+    CHECK(settings.persona_name.empty());
+    settings.persona_name = "Mia";
+    settings.save(file);
+    const auto loaded = st::Settings::load(file);
+    CHECK_EQ(loaded.persona_name, "Mia");
+
+    st::Settings long_name;
+    long_name.persona_name = std::string(300, 'x');
+    long_name.validate();
+    CHECK_EQ(long_name.persona_name.size(), std::size_t(256));
+
+    st::Settings padded;
+    padded.persona_name = "  Mia  ";
+    padded.validate();
+    CHECK_EQ(padded.persona_name, "Mia");
+}

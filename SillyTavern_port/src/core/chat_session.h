@@ -4,6 +4,7 @@
 #include "core/chat_store.h"
 #include "core/chat_types.h"
 #include "core/openai_client.h"
+#include "core/persona.h"
 #include "core/prompt.h"
 #include "core/settings.h"
 #include "core/world_info.h"
@@ -36,6 +37,10 @@ public:
     // Loads worldinfo/<book>.json (sanitized, 16 MiB cap) from dir.
     // Missing file leaves an empty book; parse/read errors throw.
     void load_world_info_book(const std::filesystem::path& dir, const std::string& book_name);
+    void set_persona_store(const PersonaStore& store);
+    const PersonaStore* persona_store() const;
+    void load_persona_store(const std::filesystem::path& data_root);
+    void save_persona_store(const std::filesystem::path& data_root) const;
     int estimated_tokens() const { return estimated_tokens_; }
     bool trimmed() const { return trimmed_; }
 
@@ -77,6 +82,8 @@ private:
     std::string filename_;
     Chat chat_;
     WorldInfoBook world_info_book_;
+    PersonaStore persona_store_;
+    bool persona_store_set_ = false;
     mutable int estimated_tokens_ = 0;
     mutable bool trimmed_ = false;
 };

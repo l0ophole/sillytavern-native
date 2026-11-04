@@ -2,6 +2,7 @@
 
 #include "core/character_card.h"
 #include "core/chat_types.h"
+#include "core/persona.h"
 #include "core/settings.h"
 #include "core/world_info.h"
 
@@ -33,13 +34,29 @@ PromptParts build_prompt_parts(const CharacterCard& card,
                                const Settings& settings,
                                const std::vector<ChatMessage>& history);
 
+PromptParts build_prompt_parts(const CharacterCard& card,
+                               const Settings& settings,
+                               const std::vector<ChatMessage>& history,
+                               const PersonaStore* persona_store);
+
 PromptParts build_prompt_parts_with_book(const CharacterCard& card,
                                          const Settings& settings,
                                          const std::vector<ChatMessage>& history,
                                          const WorldInfoBook& book);
 
+PromptParts build_prompt_parts_with_book(const CharacterCard& card,
+                                         const Settings& settings,
+                                         const std::vector<ChatMessage>& history,
+                                         const WorldInfoBook& book,
+                                         const PersonaStore* persona_store);
+
 std::vector<PromptMessage> build_prompt(const CharacterCard& card,
                                         const Settings& settings,
                                         const std::vector<ChatMessage>& history);
+
+std::vector<PromptMessage> build_prompt(const CharacterCard& card,
+                                        const Settings& settings,
+                                        const std::vector<ChatMessage>& history,
+                                        const PersonaStore* persona_store);
 
 }  // namespace st

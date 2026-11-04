@@ -157,7 +157,8 @@ ChatSession::ChatSession(CharacterCard card,
       chat_(std::move(chat)) {}
 
 std::vector<PromptMessage> ChatSession::prompt_messages() const {
-    const PromptParts parts = build_prompt_parts_with_book(card_, settings_, chat_.messages, world_info_book_);
+    const PersonaStore* persona = persona_store_set_ ? &persona_store_ : nullptr;
+    const PromptParts parts = build_prompt_parts_with_book(card_, settings_, chat_.messages, world_info_book_, persona);
 
     std::vector<PromptMessage> reserved = parts.leading_system;
     reserved.insert(reserved.end(), parts.trailing_system.begin(), parts.trailing_system.end());
@@ -185,6 +186,26 @@ std::vector<PromptMessage> ChatSession::prompt_messages() const {
 
 void ChatSession::set_world_info_book(const WorldInfoBook& book) {
     world_info_book_ = book;
+}
+
+void ChatSession::set_persona_store(const PersonaStore& store) {
+    persona_store_ = store;
+    persona_store_set_ = true;
+}
+
+const PersonaStore* ChatSession::persona_store() const {
+    return persona_store_set_ ? &persona_store_ : nullptr;
+}
+
+void ChatSession::load_persona_store(const std::filesystem::path& data_root) {
+    persona_store_ = PersonaStore::load(data_root / "personas.json");
+    persona_store_set_ = true;
+}
+
+void ChatSession::save_persona_store(const std::filesystem::path& data_root) const {
+    if (persona_store_set_) {
+        persona_store_.save(data_root / "personas.json");
+    }
 }
 
 void ChatSession::load_world_info_book(const std::filesystem::path& dir,

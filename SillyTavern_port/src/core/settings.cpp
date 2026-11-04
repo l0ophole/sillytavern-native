@@ -62,6 +62,9 @@ Settings Settings::from_json(const Json& value) {
     if (value.contains("user_name") && value["user_name"].is_string()) {
         settings.user_name = value["user_name"].get<std::string>();
     }
+    if (value.contains("persona_name") && value["persona_name"].is_string()) {
+        settings.persona_name = value["persona_name"].get<std::string>();
+    }
     if (value.contains("system_prompt") && value["system_prompt"].is_string()) {
         settings.system_prompt = value["system_prompt"].get<std::string>();
     }
@@ -95,7 +98,7 @@ Settings Settings::from_json(const Json& value) {
     }
 
     for (const char* key : {"api_base_url", "api_key", "model", "temperature", "top_p",
-                            "max_tokens", "context_size", "user_name", "system_prompt",
+                            "max_tokens", "context_size", "user_name", "persona_name", "system_prompt",
                             "stream", "request_timeout_seconds", "last_character", "last_chat",
                             "authors_note_enabled", "authors_note", "authors_note_depth",
                             "world_info_enabled", "world_info_book"}) {
@@ -145,6 +148,7 @@ Json Settings::to_json() const {
     value["max_tokens"] = max_tokens;
     value["context_size"] = context_size;
     value["user_name"] = user_name;
+    value["persona_name"] = persona_name;
     value["system_prompt"] = system_prompt;
     value["stream"] = stream;
     value["request_timeout_seconds"] = request_timeout_seconds;
@@ -177,6 +181,11 @@ void Settings::validate() {
     max_tokens = std::clamp(max_tokens, 1, context_size - 1);
     request_timeout_seconds = std::clamp(request_timeout_seconds, 5, 3600);
     user_name = normalize_user_name(user_name);
+    persona_name = trim(persona_name);
+    if (persona_name.size() > 256) {
+        persona_name.resize(256);
+        persona_name = trim(persona_name);
+    }
     world_info_book = sanitize_filename(world_info_book, "lorebook");
     authors_note_depth = std::clamp(authors_note_depth, 0, 100);
     if (authors_note.size() > 4096) {
