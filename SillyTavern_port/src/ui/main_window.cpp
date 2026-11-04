@@ -649,6 +649,11 @@ void PersonaManagerDialog::load() {
 }
 
 void PersonaManagerDialog::save() {
+    if (!load_error_.empty()) {
+        // Refuse to save over a file that failed to load: store_ is
+        // default-empty, so writing would clobber the corrupt file.
+        throw std::runtime_error(load_error_);
+    }
     // Keep the dual selection sources in sync: whichever persona is active
     // in the store becomes Settings::persona_name.
     settings_.persona_name = store_.active_name;

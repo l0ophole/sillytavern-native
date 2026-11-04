@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -1093,6 +1094,43 @@ int run_smoke_test() {
                 }
             }
             std::cout << "smoke: persona\n";
+        }
+
+        {
+            // A corrupt personas.json must survive a manager save attempt:
+            // the dialog reports the load error and save() refuses.
+            const std::filesystem::path personas_file = paths.data_dir / "personas.json";
+            st::write_file_atomic(personas_file, "{");
+            st::Settings corrupt_settings = settings;
+            corrupt_settings.persona_name = "Rook";
+            bool refused = false;
+            {
+                PersonaManagerDialog manager(window, paths, corrupt_settings, []() {});
+                if (manager.load_error().empty()) {
+                    std::cerr << "smoke: persona corrupt load error missing\n";
+                    return 1;
+                }
+                try {
+                    manager.save();
+                } catch (const std::exception&) {
+                    refused = true;
+                }
+            }
+            if (!refused) {
+                std::cerr << "smoke: persona corrupt save not refused\n";
+                return 1;
+            }
+            std::string preserved;
+            {
+                std::ifstream input(personas_file);
+                preserved.assign(std::istreambuf_iterator<char>(input),
+                                 std::istreambuf_iterator<char>());
+            }
+            if (preserved != "{" || corrupt_settings.persona_name != "Rook") {
+                std::cerr << "smoke: persona corrupt file clobbered\n";
+                return 1;
+            }
+            std::cout << "smoke: persona corrupt\n";
         }
 
         {
