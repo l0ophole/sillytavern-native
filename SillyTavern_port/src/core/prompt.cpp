@@ -90,6 +90,13 @@ void insert_at_depth(std::vector<PromptMessage>& history,
 PromptParts build_prompt_parts(const CharacterCard& card,
                                const Settings& settings,
                                const std::vector<ChatMessage>& history) {
+    return build_prompt_parts_with_book(card, settings, history, WorldInfoBook{});
+}
+
+PromptParts build_prompt_parts_with_book(const CharacterCard& card,
+                                         const Settings& settings,
+                                         const std::vector<ChatMessage>& history,
+                                         const WorldInfoBook& book) {
     const std::string character = card.name.empty() ? "Character" : card.name;
     const std::string user = normalize_user_name(settings.user_name);
 
@@ -131,6 +138,31 @@ PromptParts build_prompt_parts(const CharacterCard& card,
         if (!expanded_note.empty()) {
             insert_at_depth(parts.history, PromptMessage{"system", expanded_note},
                             settings.authors_note_depth);
+        }
+    }
+
+    if (settings.world_info_enabled && !book.entries.empty()) {
+        std::vector<std::string> texts;
+        for (const ChatMessage& message : history) {
+            if (!message.mes.empty()) {
+                texts.push_back(message.mes);
+            }
+        }
+        // The last user message is already included above; scanning it once is
+        // enough because triggered_entries deduplicates by key+content.
+        const std::vector<WorldInfoEntry> hits = triggered_entries(book, texts);
+        if (!hits.empty()) {
+            std::string joined;
+            for (const WorldInfoEntry& entry : hits) {
+                if (!joined.empty()) {
+                    joined += "\n\n";
+                }
+                joined += entry.content;
+            }
+            if (!joined.empty()) {
+                parts.leading_system.push_back(
+                    PromptMessage{"system", "World Info:\n" + joined});
+            }
         }
     }
 

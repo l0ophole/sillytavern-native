@@ -2,6 +2,7 @@
 
 #include "core/atomic_file.h"
 #include "core/identity.h"
+#include "core/names.h"
 
 #include <algorithm>
 #include <cmath>
@@ -86,11 +87,18 @@ Settings Settings::from_json(const Json& value) {
     if (value.contains("authors_note_depth") && value["authors_note_depth"].is_number_integer()) {
         settings.authors_note_depth = value["authors_note_depth"].get<int>();
     }
+    if (value.contains("world_info_enabled") && value["world_info_enabled"].is_boolean()) {
+        settings.world_info_enabled = value["world_info_enabled"].get<bool>();
+    }
+    if (value.contains("world_info_book") && value["world_info_book"].is_string()) {
+        settings.world_info_book = value["world_info_book"].get<std::string>();
+    }
 
     for (const char* key : {"api_base_url", "api_key", "model", "temperature", "top_p",
                             "max_tokens", "context_size", "user_name", "system_prompt",
                             "stream", "request_timeout_seconds", "last_character", "last_chat",
-                            "authors_note_enabled", "authors_note", "authors_note_depth"}) {
+                            "authors_note_enabled", "authors_note", "authors_note_depth",
+                            "world_info_enabled", "world_info_book"}) {
         erase_known(settings.unknown, key);
     }
 
@@ -145,6 +153,8 @@ Json Settings::to_json() const {
     value["authors_note_enabled"] = authors_note_enabled;
     value["authors_note"] = authors_note;
     value["authors_note_depth"] = authors_note_depth;
+    value["world_info_enabled"] = world_info_enabled;
+    value["world_info_book"] = world_info_book;
     return value;
 }
 
@@ -167,6 +177,7 @@ void Settings::validate() {
     max_tokens = std::clamp(max_tokens, 1, context_size - 1);
     request_timeout_seconds = std::clamp(request_timeout_seconds, 5, 3600);
     user_name = normalize_user_name(user_name);
+    world_info_book = sanitize_filename(world_info_book, "lorebook");
     authors_note_depth = std::clamp(authors_note_depth, 0, 100);
     if (authors_note.size() > 4096) {
         authors_note.resize(4096);

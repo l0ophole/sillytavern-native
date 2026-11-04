@@ -4,6 +4,7 @@
 #include "core/chat_types.h"
 #include "core/prompt.h"
 #include "core/settings.h"
+#include "core/world_info.h"
 
 #include <string>
 
@@ -213,5 +214,50 @@ TEST(prompt_authors_note_disabled_or_empty_is_absent) {
     CHECK_EQ(parts.history.size(), std::size_t(5));
     for (const auto& message : parts.history) {
         CHECK(message.content != "note");
+    }
+}
+
+TEST(prompt_injects_world_info_once) {
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.world_info_enabled = true;
+    st::WorldInfoBook book;
+    book.entries = {{"dragon", "", "Dragons are rare.", true, 0, 0}};
+    st::ChatMessage user;
+    user.name = "Alice";
+    user.is_user = true;
+    user.mes = "I saw a dragon";
+    const auto parts =
+        st::build_prompt_parts_with_book(card, settings, {user}, book);
+    std::size_t counts = 0;
+    for (const auto& message : parts.leading_system) {
+        if (message.content.find("World Info:") != std::string::npos) {
+            ++counts;
+        }
+    }
+    CHECK_EQ(counts, 1u);
+    CHECK_EQ(parts.leading_system.size(), std::size_t(2));
+    CHECK(parts.leading_system.back().content.find("World Info:\nDragons are rare.") !=
+          std::string::npos);
+}
+
+TEST(prompt_world_info_absent_when_disabled) {
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.world_info_enabled = false;
+    st::WorldInfoBook book;
+    book.entries = {{"dragon", "", "Dragons are rare.", true, 0, 0}};
+    st::ChatMessage user;
+    user.name = "Alice";
+    user.is_user = true;
+    user.mes = "I saw a dragon";
+    const auto parts =
+        st::build_prompt_parts_with_book(card, settings, {user}, book);
+    for (const auto& message : parts.leading_system) {
+        CHECK(message.content.find("World Info:") == std::string::npos);
     }
 }

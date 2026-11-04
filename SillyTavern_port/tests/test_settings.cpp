@@ -109,3 +109,27 @@ TEST(settings_authors_note_round_trips_and_clamps) {
     negative.validate();
     CHECK_EQ(negative.authors_note_depth, 0);
 }
+
+TEST(settings_world_info_round_trips) {
+    TempDir temp;
+    const auto file = temp.path() / "settings.json";
+    auto settings = st::Settings::load(file);
+    CHECK(!settings.world_info_enabled);
+    CHECK_EQ(settings.world_info_book, "lorebook");
+    settings.world_info_enabled = true;
+    settings.world_info_book = "dragons";
+    settings.save(file);
+    const auto loaded = st::Settings::load(file);
+    CHECK(loaded.world_info_enabled);
+    CHECK_EQ(loaded.world_info_book, "dragons");
+
+    st::Settings sanitized;
+    sanitized.world_info_book = "../evil/book";
+    sanitized.validate();
+    CHECK(sanitized.world_info_book.find('/') == std::string::npos);
+    CHECK(sanitized.world_info_book.find("..") == std::string::npos);
+    st::Settings empty;
+    empty.world_info_book = "";
+    empty.validate();
+    CHECK_EQ(empty.world_info_book, "lorebook");
+}

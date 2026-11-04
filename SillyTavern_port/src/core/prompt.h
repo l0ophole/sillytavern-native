@@ -3,6 +3,7 @@
 #include "core/character_card.h"
 #include "core/chat_types.h"
 #include "core/settings.h"
+#include "core/world_info.h"
 
 #include <string>
 #include <vector>
@@ -31,6 +32,11 @@ void insert_at_depth(std::vector<PromptMessage>& history,
 PromptParts build_prompt_parts(const CharacterCard& card,
                                const Settings& settings,
                                const std::vector<ChatMessage>& history);
+
+PromptParts build_prompt_parts_with_book(const CharacterCard& card,
+                                         const Settings& settings,
+                                         const std::vector<ChatMessage>& history,
+                                         const WorldInfoBook& book);
 
 std::vector<PromptMessage> build_prompt(const CharacterCard& card,
                                         const Settings& settings,

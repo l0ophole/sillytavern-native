@@ -25,6 +25,8 @@ struct Settings {
     bool authors_note_enabled = false;
     std::string authors_note;
     int authors_note_depth = 4;
+    bool world_info_enabled = false;
+    std::string world_info_book = "lorebook";
     Json unknown = Json::object();
 
     static Settings load(const std::filesystem::path& path);
