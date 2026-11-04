@@ -7,10 +7,17 @@ cd "$root"
 make test-sanitize
 
 make clean
-make -j"$(nproc)"
+make -j"$(nproc)" 2>&1 | tee build.log
+if grep -q 'warning:' build.log; then
+    echo "verify: build produced warnings" >&2
+    grep 'warning:' build.log >&2
+    rm -f build.log
+    exit 1
+fi
+rm -f build.log
 version="$(./build/sillytavern-port --version)"
-if [ "$version" != "SillyTavern Port 0.1.1" ]; then
-    echo "verify: expected version 'SillyTavern Port 0.1.1', found '$version'" >&2
+if [ "$version" != "SillyTavern Port 0.1.2" ]; then
+    echo "verify: expected version 'SillyTavern Port 0.1.2', found '$version'" >&2
     exit 1
 fi
 make -j"$(nproc)" test
@@ -84,4 +91,4 @@ if [ -d ../SillyTavern/.git ] && [ -n "$(git -C ../SillyTavern status --porcelai
     exit 1
 fi
 
-echo "v0.1.1 verification: PASS"
+echo "v0.1.2 verification: PASS"

@@ -68,6 +68,27 @@ v0.1.1 is a reliability release; it adds no v0.2 chat features.
   `tests/alpine_build.sh` repeats build, unit, integration, and smoke checks on
   Alpine 3.20 (musl).
 
+## v0.1.2 completion
+
+v0.1.2 is a reliability cleanup release; it adds no new features and the
+feature registry is unchanged (105 features, 21 ported, 84 planned; targets
+19 `0.1` + 2 `0.1.1`).
+
+- Draft write cap and backoff (`56639e8`): streaming draft writes are bounded
+  and failed saves are retried with backoff.
+- Draft lifecycle on delete/rename (`1d57fec`): deleting or renaming a chat
+  clears or moves its pending draft.
+- Recoverable regeneration drafts (`39e1c21`): a draft captured during
+  regeneration is recoverable instead of being discarded on recovery.
+- Scan-failure reporting (`12b8176`): character-library scan failures are
+  reported instead of silently showing an empty library.
+- Incremental SSE scanning (`0700dad`): the SSE parser no longer rescans
+  buffered bytes on every feed.
+- Regression tests (`f88f860`): coverage for failed saves, stale loads, and
+  malformed drafts.
+- Warning-free build assertion (this release): `tests/verify_v01.sh` fails
+  when the build log contains any `warning:` line.
+
 ## Known v0.1.1 limitations
 
 - Startup character-library scans and chat loads run on background workers.

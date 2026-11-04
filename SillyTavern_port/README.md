@@ -26,6 +26,21 @@ single-user core-chat MVP; the full feature set is tracked in
   SSE event.
 - ASan/UBSan unit tests through `make test-sanitize`.
 
+## v0.1.2 scope
+
+- Draft lifecycle: deleting or renaming a chat clears or moves its pending
+  crash-recovery draft.
+- Draft write cap: streaming draft writes are bounded and failed saves are
+  retried with backoff.
+- Recoverable regeneration: a draft captured during regeneration is
+  recoverable instead of being discarded on recovery.
+- Scan-failure status: character-library scan failures are reported instead
+  of silently showing an empty library.
+- SSE scan cost: the SSE parser no longer rescans buffered bytes on every
+  feed.
+- Warning assertion: the host verification gate fails if the build log
+  contains any `warning:` line, keeping the build warning-free.
+
 Startup scans and chat loads run on background workers. Explicit import/delete
 and new-chat writes remain synchronous on the GTK thread and are size-capped:
 1 MiB for `settings.json`, 64 MiB for character cards and chat logs, and 16 MiB
