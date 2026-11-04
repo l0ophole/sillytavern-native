@@ -77,6 +77,16 @@ std::string expand_macros(const std::string& text,
     return result;
 }
 
+void insert_at_depth(std::vector<PromptMessage>& history,
+                     const PromptMessage& note,
+                     int depth) {
+    const std::size_t effective_depth =
+        depth <= 0 ? 0u : static_cast<std::size_t>(depth);
+    const std::size_t follow = effective_depth < history.size() ? effective_depth : history.size();
+    const std::size_t index = history.size() - follow;
+    history.insert(history.begin() + static_cast<std::ptrdiff_t>(index), note);
+}
+
 PromptParts build_prompt_parts(const CharacterCard& card,
                                const Settings& settings,
                                const std::vector<ChatMessage>& history) {
@@ -114,6 +124,14 @@ PromptParts build_prompt_parts(const CharacterCard& card,
         }
         const char* role = message.is_system ? "system" : (message.is_user ? "user" : "assistant");
         parts.history.push_back(PromptMessage{role, expand_macros(message.mes, character, user)});
+    }
+
+    if (settings.authors_note_enabled) {
+        const std::string expanded_note = expand_macros(settings.authors_note, character, user);
+        if (!expanded_note.empty()) {
+            insert_at_depth(parts.history, PromptMessage{"system", expanded_note},
+                            settings.authors_note_depth);
+        }
     }
 
     if (!card.post_history_instructions.empty()) {

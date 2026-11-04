@@ -24,6 +24,10 @@ std::string expand_macros(const std::string& text,
                           const std::string& character,
                           const std::string& user);
 
+void insert_at_depth(std::vector<PromptMessage>& history,
+                     const PromptMessage& note,
+                     int depth);
+
 PromptParts build_prompt_parts(const CharacterCard& card,
                                const Settings& settings,
                                const std::vector<ChatMessage>& history);

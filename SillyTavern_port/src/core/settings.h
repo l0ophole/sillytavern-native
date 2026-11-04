@@ -22,6 +22,9 @@ struct Settings {
     int request_timeout_seconds = 300;
     std::string last_character;
     std::string last_chat;
+    bool authors_note_enabled = false;
+    std::string authors_note;
+    int authors_note_depth = 4;
     Json unknown = Json::object();
 
     static Settings load(const std::filesystem::path& path);

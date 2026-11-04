@@ -77,10 +77,20 @@ Settings Settings::from_json(const Json& value) {
     if (value.contains("last_chat") && value["last_chat"].is_string()) {
         settings.last_chat = value["last_chat"].get<std::string>();
     }
+    if (value.contains("authors_note_enabled") && value["authors_note_enabled"].is_boolean()) {
+        settings.authors_note_enabled = value["authors_note_enabled"].get<bool>();
+    }
+    if (value.contains("authors_note") && value["authors_note"].is_string()) {
+        settings.authors_note = value["authors_note"].get<std::string>();
+    }
+    if (value.contains("authors_note_depth") && value["authors_note_depth"].is_number_integer()) {
+        settings.authors_note_depth = value["authors_note_depth"].get<int>();
+    }
 
     for (const char* key : {"api_base_url", "api_key", "model", "temperature", "top_p",
                             "max_tokens", "context_size", "user_name", "system_prompt",
-                            "stream", "request_timeout_seconds", "last_character", "last_chat"}) {
+                            "stream", "request_timeout_seconds", "last_character", "last_chat",
+                            "authors_note_enabled", "authors_note", "authors_note_depth"}) {
         erase_known(settings.unknown, key);
     }
 
@@ -132,6 +142,9 @@ Json Settings::to_json() const {
     value["request_timeout_seconds"] = request_timeout_seconds;
     value["last_character"] = last_character;
     value["last_chat"] = last_chat;
+    value["authors_note_enabled"] = authors_note_enabled;
+    value["authors_note"] = authors_note;
+    value["authors_note_depth"] = authors_note_depth;
     return value;
 }
 
@@ -154,6 +167,10 @@ void Settings::validate() {
     max_tokens = std::clamp(max_tokens, 1, context_size - 1);
     request_timeout_seconds = std::clamp(request_timeout_seconds, 5, 3600);
     user_name = normalize_user_name(user_name);
+    authors_note_depth = std::clamp(authors_note_depth, 0, 100);
+    if (authors_note.size() > 4096) {
+        authors_note.resize(4096);
+    }
     if (trim(system_prompt).empty()) {
         system_prompt =
             "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}.";

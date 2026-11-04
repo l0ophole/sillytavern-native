@@ -80,3 +80,32 @@ TEST(settings_load_rejects_oversized_file) {
     }
     CHECK(threw);
 }
+
+TEST(settings_authors_note_round_trips_and_clamps) {
+    TempDir temp;
+    const auto file = temp.path() / "settings.json";
+    auto settings = st::Settings::load(file);
+    CHECK(!settings.authors_note_enabled);
+    CHECK(settings.authors_note.empty());
+    CHECK_EQ(settings.authors_note_depth, 4);
+    settings.authors_note_enabled = true;
+    settings.authors_note = "Remember {{char}} is brave.";
+    settings.authors_note_depth = 7;
+    settings.save(file);
+    const auto loaded = st::Settings::load(file);
+    CHECK(loaded.authors_note_enabled);
+    CHECK_EQ(loaded.authors_note, "Remember {{char}} is brave.");
+    CHECK_EQ(loaded.authors_note_depth, 7);
+
+    st::Settings clamped;
+    clamped.authors_note_depth = 500;
+    clamped.authors_note = std::string(5000, 'x');
+    clamped.validate();
+    CHECK_EQ(clamped.authors_note_depth, 100);
+    CHECK_EQ(clamped.authors_note.size(), std::size_t(4096));
+
+    st::Settings negative;
+    negative.authors_note_depth = -10;
+    negative.validate();
+    CHECK_EQ(negative.authors_note_depth, 0);
+}
