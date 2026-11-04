@@ -581,3 +581,68 @@ TEST(session_continue_requires_assistant_tail) {
     CHECK(trailing_session.can_continue());
     CHECK_EQ(trailing_session.continue_prefix(), "Hello");
 }
+
+TEST(chat_session_swipes_default_to_the_message_text) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+    st::ChatMessage message;
+    message.name = "Seraphina";
+    message.mes = "hello";
+    chat.messages = {message};
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    CHECK_EQ(session.swipe_count(0), 1u);
+    CHECK_EQ(session.swipe_index(0), 0u);
+    CHECK_EQ(session.chat().messages[0].mes, "hello");
+}
+
+TEST(chat_session_add_and_select_swipe) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_assistant("one");
+    CHECK(session.add_swipe(0, "two"));
+    CHECK_EQ(session.swipe_count(0), 2u);
+    CHECK_EQ(session.swipe_index(0), 1u);
+    CHECK_EQ(session.chat().messages[0].mes, "two");
+    CHECK(session.select_swipe(0, 0));
+    CHECK_EQ(session.chat().messages[0].mes, "one");
+    CHECK(!session.select_swipe(0, 7));
+    CHECK_EQ(session.chat().messages[0].mes, "one");
+}
+
+TEST(chat_session_swipes_survive_save_and_load) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat;
+    chat.metadata.user_name = "Traveler";
+    chat.metadata.character_name = "Seraphina";
+    chat.metadata.create_date = "2026-11-01T00:00:00Z";
+
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_assistant("one");
+    CHECK(session.add_swipe(0, "two"));
+    CHECK(session.select_swipe(0, 0));
+    session.save();
+
+    const st::Chat loaded = store.load("Seraphina", "chat.jsonl");
+    CHECK_EQ(loaded.messages.size(), 1u);
+    CHECK_EQ(loaded.messages[0].extra["swipes"].size(), 2u);
+    CHECK_EQ(loaded.messages[0].extra["swipe_id"].get<int>(), 0);
+    CHECK_EQ(loaded.messages[0].mes, "one");
+}

@@ -33,6 +33,90 @@ ChatMessage make_message(const std::string& name, bool is_user, const std::strin
     return message;
 }
 
+bool is_assistant(const ChatMessage& message) {
+    return !message.is_user && !message.is_system;
+}
+
+// Defensive read of the swipe array: any missing or malformed `swipes`
+// entry (not an array, empty, or containing a non-string) falls back to a
+// single swipe equal to `mes`.
+std::vector<std::string> read_swipes(const ChatMessage& message) {
+    if (!message.extra.is_object()) {
+        return {message.mes};
+    }
+    const auto it = message.extra.find("swipes");
+    if (it == message.extra.end() || !it->is_array() || it->empty()) {
+        return {message.mes};
+    }
+    std::vector<std::string> swipes;
+    swipes.reserve(it->size());
+    for (const Json& entry : *it) {
+        if (!entry.is_string()) {
+            return {message.mes};
+        }
+        swipes.push_back(entry.get<std::string>());
+    }
+    return swipes;
+}
+
+// 0-based `swipe_id` clamped into [0, count); missing or malformed values
+// read as 0.
+std::size_t read_swipe_id(const ChatMessage& message, std::size_t count) {
+    if (!message.extra.is_object() || count == 0) {
+        return 0;
+    }
+    const auto it = message.extra.find("swipe_id");
+    if (it == message.extra.end()) {
+        return 0;
+    }
+    if (it->is_number_integer()) {
+        const long long id = it->get<long long>();
+        if (id < 0 || static_cast<unsigned long long>(id) >= count) {
+            return 0;
+        }
+        return static_cast<std::size_t>(id);
+    }
+    if (it->is_number_unsigned()) {
+        const unsigned long long id = it->get<unsigned long long>();
+        if (id >= count) {
+            return 0;
+        }
+        return static_cast<std::size_t>(id);
+    }
+    return 0;
+}
+
+void write_swipes(ChatMessage& message, const std::vector<std::string>& swipes, std::size_t id) {
+    Json array = Json::array();
+    for (const std::string& text : swipes) {
+        array.push_back(text);
+    }
+    message.extra["swipes"] = array;
+    message.extra["swipe_id"] = static_cast<int>(id);
+}
+
+// Keeps the selected swipe entry aligned with `mes` when a swipe array is
+// already present; a message without one is left untouched.
+void sync_swipe(ChatMessage& message) {
+    if (!is_assistant(message) || !message.extra.is_object()) {
+        return;
+    }
+    const auto it = message.extra.find("swipes");
+    if (it == message.extra.end() || !it->is_array() || it->empty()) {
+        return;
+    }
+    std::vector<std::string> swipes;
+    for (const Json& entry : *it) {
+        if (!entry.is_string()) {
+            return;  // array was malformed; leave it as-is
+        }
+        swipes.push_back(entry.get<std::string>());
+    }
+    const std::size_t id = read_swipe_id(message, swipes.size());
+    swipes[id] = message.mes;
+    write_swipes(message, swipes, id);
+}
+
 bool needs_separator(const std::string& tail, const std::string& text) {
     if (tail.empty() || text.empty()) {
         return false;
@@ -113,7 +197,63 @@ void ChatSession::append_user(const std::string& text) {
 }
 
 void ChatSession::append_assistant(const std::string& text) {
-    chat_.messages.push_back(make_message(card_.name, false, text));
+    ChatMessage message = make_message(card_.name, false, text);
+    write_swipes(message, {text}, 0);
+    chat_.messages.push_back(std::move(message));
+}
+
+std::size_t ChatSession::swipe_count(std::size_t index) const {
+    if (index >= chat_.messages.size()) {
+        return 0;
+    }
+    const ChatMessage& message = chat_.messages[index];
+    if (!is_assistant(message)) {
+        return 1;
+    }
+    return read_swipes(message).size();
+}
+
+std::size_t ChatSession::swipe_index(std::size_t index) const {
+    if (index >= chat_.messages.size()) {
+        return 0;
+    }
+    const ChatMessage& message = chat_.messages[index];
+    if (!is_assistant(message)) {
+        return 0;
+    }
+    return read_swipe_id(message, read_swipes(message).size());
+}
+
+bool ChatSession::select_swipe(std::size_t index, std::size_t swipe) {
+    if (index >= chat_.messages.size()) {
+        return false;
+    }
+    ChatMessage& message = chat_.messages[index];
+    if (!is_assistant(message)) {
+        return false;
+    }
+    const std::vector<std::string> swipes = read_swipes(message);
+    if (swipe >= swipes.size()) {
+        return false;
+    }
+    write_swipes(message, swipes, swipe);
+    message.mes = swipes[swipe];
+    return true;
+}
+
+bool ChatSession::add_swipe(std::size_t index, const std::string& text) {
+    if (index >= chat_.messages.size() || text.empty()) {
+        return false;
+    }
+    ChatMessage& message = chat_.messages[index];
+    if (!is_assistant(message)) {
+        return false;
+    }
+    std::vector<std::string> swipes = read_swipes(message);
+    swipes.push_back(text);
+    write_swipes(message, swipes, swipes.size() - 1);
+    message.mes = text;
+    return true;
 }
 
 bool ChatSession::recover_draft(const ChatDraft& draft) {
@@ -131,6 +271,7 @@ bool ChatSession::recover_draft(const ChatDraft& draft) {
         }
         ChatMessage& target = chat_.messages.back();
         target.mes = draft.text;
+        sync_swipe(target);
         if (!draft.send_date.empty()) {
             target.send_date = draft.send_date;
         }
@@ -144,6 +285,7 @@ bool ChatSession::recover_draft(const ChatDraft& draft) {
         return true;
     }
     ChatMessage message = make_message(card_.name, false, draft.text);
+    write_swipes(message, {draft.text}, 0);
     if (!draft.send_date.empty()) {
         message.send_date = draft.send_date;
     }
@@ -168,6 +310,7 @@ bool ChatSession::edit_message(std::size_t index, const std::string& text) {
         return false;
     }
     chat_.messages[index].mes = text;
+    sync_swipe(chat_.messages[index]);
     return true;
 }
 
@@ -231,11 +374,13 @@ void ChatSession::append_to_last_assistant(const std::string& text) {
     if (!can_continue() || text.empty()) {
         return;
     }
-    std::string& message = chat_.messages[last_non_empty_index(chat_)].mes;
+    ChatMessage& target = chat_.messages[last_non_empty_index(chat_)];
+    std::string& message = target.mes;
     if (needs_separator(message, text)) {
         message += ' ';
     }
     message += text;
+    sync_swipe(target);
 }
 
 }  // namespace st

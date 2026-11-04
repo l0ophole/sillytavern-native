@@ -35,6 +35,10 @@ public:
 
     void append_user(const std::string& text);
     void append_assistant(const std::string& text);
+    std::size_t swipe_count(std::size_t index) const;
+    std::size_t swipe_index(std::size_t index) const;
+    bool select_swipe(std::size_t index, std::size_t swipe);
+    bool add_swipe(std::size_t index, const std::string& text);
     bool recover_draft(const ChatDraft& draft);
     void save() const;
 
