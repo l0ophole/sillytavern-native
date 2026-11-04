@@ -650,3 +650,59 @@ TEST(chat_session_swipes_survive_save_and_load) {
     CHECK_EQ(loaded.messages[0].extra["swipe_id"].get<int>(), 0);
     CHECK_EQ(loaded.messages[0].mes, "one");
 }
+
+TEST(chat_session_branch_copies_prefix_only) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello there.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_user("message 1");
+    session.append_assistant("message 2");
+    session.append_user("message 3");
+    CHECK_EQ(session.chat().messages.size(), 4u);
+
+    const st::Chat branch = session.branch(1);
+    CHECK_EQ(branch.messages.size(), 2u);
+    CHECK_EQ(branch.messages[1].mes, session.chat().messages[1].mes);
+    CHECK_EQ(branch.messages[1].mes, "message 1");
+    CHECK_EQ(session.chat().messages.size(), 4u);
+    CHECK_EQ(session.chat().messages[3].mes, "message 3");
+    CHECK(!branch.metadata.create_date.empty());
+
+    const st::Chat empty = session.branch(99);
+    CHECK(empty.messages.empty());
+    CHECK_EQ(session.chat().messages.size(), 4u);
+}
+
+TEST(chat_session_bookmarks_round_trip) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+
+    st::Settings settings;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello there.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.append_user("message 1");
+    session.append_assistant("message 2");
+
+    CHECK(session.add_bookmark(2, "here"));
+    CHECK(!session.add_bookmark(99, "nowhere"));
+    const auto bookmarks = session.bookmarks();
+    CHECK_EQ(bookmarks.size(), 1u);
+    CHECK_EQ(bookmarks[0].first, 2u);
+    CHECK_EQ(bookmarks[0].second, "here");
+
+    session.save();
+    const st::Chat loaded = store.load("Seraphina", "chat.jsonl");
+    st::ChatSession reloaded_session(
+        make_card(), settings, store, "Seraphina", "chat.jsonl", loaded);
+    const auto loaded_bookmarks = reloaded_session.bookmarks();
+    CHECK_EQ(loaded_bookmarks.size(), 1u);
+    CHECK_EQ(loaded_bookmarks[0].first, 2u);
+    CHECK_EQ(loaded_bookmarks[0].second, "here");
+
+    CHECK(session.remove_bookmark(2));
+    CHECK(session.bookmarks().empty());
+    CHECK(!session.remove_bookmark(2));
+}

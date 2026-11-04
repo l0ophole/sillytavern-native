@@ -95,12 +95,17 @@ ChatView::ChatView(st::ChatStore& chats,
     continue_item_.set_label("Continue");
     swipe_prev_item_.set_label("< Previous swipe");
     swipe_next_item_.set_label("Next swipe >");
+    branch_item_.set_label("Branch from here");
+    bookmarks_item_.set_label("Bookmarks");
+    bookmarks_item_.set_submenu(bookmarks_menu_);
     context_menu_.append(edit_item_);
     context_menu_.append(delete_item_);
     context_menu_.append(regenerate_item_);
     context_menu_.append(continue_item_);
     context_menu_.append(swipe_prev_item_);
     context_menu_.append(swipe_next_item_);
+    context_menu_.append(branch_item_);
+    context_menu_.append(bookmarks_item_);
     context_menu_.attach_to_widget(transcript_view_);
     edit_item_.signal_activate().connect(
         sigc::mem_fun(*this, &ChatView::on_edit_message));
@@ -112,6 +117,8 @@ ChatView::ChatView(st::ChatStore& chats,
         sigc::mem_fun(*this, &ChatView::on_continue));
     swipe_prev_item_.signal_activate().connect([this]() { swipe_current(-1); });
     swipe_next_item_.signal_activate().connect([this]() { swipe_current(1); });
+    branch_item_.signal_activate().connect(
+        [this]() { branch_from(context_index_); });
     context_menu_.show_all();
 
     composer_view_.set_wrap_mode(Gtk::WRAP_WORD_CHAR);
@@ -460,6 +467,7 @@ bool ChatView::on_transcript_button_press(GdkEventButton* event) {
 
     regenerate_item_.set_sensitive(session_->can_regenerate_at(context_index_));
     continue_item_.set_sensitive(session_->can_continue_at(context_index_));
+    rebuild_bookmarks_menu();
     update_controls();
     context_menu_.popup_at_pointer(reinterpret_cast<const GdkEvent*>(event));
     return true;
@@ -624,6 +632,120 @@ bool ChatView::swipe_current(int delta) {
     set_status("Swipe " + std::to_string(static_cast<std::size_t>(target) + 1) + "/" +
                std::to_string(count));
     return true;
+}
+
+bool ChatView::branch_from(std::size_t index) {
+    if (!session_ || streaming_ || loading_ || filename_.empty() ||
+        character_key_.empty() || index >= session_->chat().messages.size()) {
+        set_status("Branch error: invalid message");
+        return false;
+    }
+
+    const st::Chat branch = session_->branch(index);
+    if (branch.messages.empty()) {
+        set_status("Branch error: invalid message");
+        return false;
+    }
+
+    std::string stem = filename_;
+    if (stem.size() > 6 && stem.substr(stem.size() - 6) == ".jsonl") {
+        stem.resize(stem.size() - 6);
+    }
+    std::string new_name;
+    for (int n = 2;; ++n) {
+        new_name = stem + " - branch " + std::to_string(n) + ".jsonl";
+        if (!chats_.exists(character_key_, new_name)) {
+            break;
+        }
+    }
+
+    try {
+        chats_.save(character_key_, new_name, branch);
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("chat branch failed: ") + error.what());
+        set_status(std::string("Branch error: ") + error.what());
+        return false;
+    }
+    return load_chat_async(new_name);
+}
+
+void ChatView::rebuild_bookmarks_menu() {
+    for (Gtk::Widget* child : bookmarks_menu_.get_children()) {
+        bookmarks_menu_.remove(*child);
+    }
+    auto* add_item = Gtk::manage(new Gtk::MenuItem("Add bookmark here"));
+    add_item->signal_activate().connect(
+        sigc::mem_fun(*this, &ChatView::on_add_bookmark));
+    bookmarks_menu_.append(*add_item);
+
+    if (!session_) {
+        bookmarks_menu_.show_all();
+        return;
+    }
+    for (const auto& [index, label] : session_->bookmarks()) {
+        const std::string text = (label.empty() ? std::string("Bookmark") : label) +
+                                 " (message " + std::to_string(index + 1) + ")";
+        auto* item = Gtk::manage(new Gtk::MenuItem(text));
+        item->signal_activate().connect(
+            [this, index]() { jump_to_bookmark(index); });
+        bookmarks_menu_.append(*item);
+    }
+    bookmarks_menu_.show_all();
+}
+
+void ChatView::jump_to_bookmark(std::size_t index) {
+    if (index >= message_ranges_.size()) {
+        return;
+    }
+    Glib::RefPtr<Gtk::TextBuffer> buffer = transcript_view_.get_buffer();
+    Gtk::TextIter iter = buffer->get_iter_at_offset(
+        static_cast<int>(message_ranges_[index].begin));
+    transcript_view_.scroll_to(iter, 0.0);
+    gtk_text_buffer_select_range(buffer->gobj(), iter.gobj(), iter.gobj());
+}
+
+void ChatView::on_add_bookmark() {
+    if (!session_ || streaming_ || loading_ ||
+        context_index_ >= session_->chat().messages.size()) {
+        return;
+    }
+    const std::size_t index = context_index_;
+
+    Gtk::Dialog dialog("Add bookmark", true);
+    if (Gtk::Window* window = top_window()) {
+        dialog.set_transient_for(*window);
+    }
+    dialog.set_default_size(420, 120);
+    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Save", Gtk::RESPONSE_OK);
+    auto* entry = Gtk::manage(new Gtk::Entry());
+    entry->set_text("Bookmark");
+    entry->set_activates_default(true);
+    dialog.set_default_response(Gtk::RESPONSE_OK);
+    dialog.get_content_area()->pack_start(*entry, true, true, 6);
+    dialog.show_all();
+    if (dialog.run() != Gtk::RESPONSE_OK) {
+        return;
+    }
+    const std::string label = trim_copy(entry->get_text().raw());
+    if (label.empty()) {
+        set_status("Bookmark error: label cannot be empty");
+        return;
+    }
+    const st::Chat before = session_->snapshot();
+    try {
+        if (!session_->add_bookmark(index, label)) {
+            set_status("Bookmark error: message not found");
+            return;
+        }
+        session_->save();
+        set_status("Bookmarked message " + std::to_string(index + 1));
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("bookmark save failed: ") + error.what());
+        session_->restore(before);
+        set_status(std::string("Save error: ") + error.what());
+    }
 }
 
 bool ChatView::start_generation(st::OpenAiRequest request, bool continue_mode) {

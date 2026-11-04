@@ -742,6 +742,61 @@ int run_smoke_test() {
             std::cout << "smoke: crash recovery\n";
         }
 
+        {
+            st::CharacterEntry branch_entry;
+            branch_entry.id = "branch-bot";
+            branch_entry.card.name = "BranchBot";
+            branch_entry.card.system_prompt = "Test.";
+            branch_entry.card.first_mes = "Greeting.";
+
+            st::Chat branch_chat = chats.create(
+                "branch-bot", st::normalize_user_name(settings.user_name), "Greeting.");
+            st::ChatMessage branch_user;
+            branch_user.name = st::normalize_user_name(settings.user_name);
+            branch_user.is_user = true;
+            branch_user.send_date = "2026-11-01T00:00:01Z";
+            branch_user.mes = "Branch user";
+            branch_chat.messages.push_back(branch_user);
+            st::ChatMessage branch_assistant;
+            branch_assistant.name = "BranchBot";
+            branch_assistant.send_date = "2026-11-01T00:00:02Z";
+            branch_assistant.mes = "Branch assistant";
+            branch_chat.messages.push_back(branch_assistant);
+            chats.save("branch-bot", "branch-source.jsonl", branch_chat);
+
+            ChatView branch_view(chats, settings, [](const std::string&) {});
+            branch_view.show_all();
+            if (!branch_view.set_character(branch_entry)) {
+                std::cerr << "smoke: branch set_character failed\n";
+                return 1;
+            }
+            if (!branch_view.branch_from(1)) {
+                std::cerr << "smoke: branch_from failed\n";
+                return 1;
+            }
+            const gint64 branch_deadline = g_get_monotonic_time() + 5 * 1000 * 1000;
+            while (branch_view.is_loading() &&
+                   g_get_monotonic_time() < branch_deadline) {
+                while (Glib::MainContext::get_default()->iteration(false)) {
+                }
+                g_usleep(1000);
+            }
+            if (branch_view.is_loading() ||
+                branch_view.current_filename().find("branch") == std::string::npos) {
+                std::cerr << "smoke: branch load failed: "
+                          << branch_view.current_filename() << '\n';
+                return 1;
+            }
+            const st::Chat branched = chats.load("branch-bot", branch_view.current_filename());
+            const st::Chat source_chat = chats.load("branch-bot", "branch-source.jsonl");
+            if (branched.messages.size() != std::size_t(2) ||
+                source_chat.messages.size() != std::size_t(3)) {
+                std::cerr << "smoke: branch message count mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: branch\n";
+        }
+
         window.hide();
         return 0;
     } catch (const std::exception& error) {

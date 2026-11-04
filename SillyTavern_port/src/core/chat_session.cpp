@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <ctime>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -254,6 +255,122 @@ bool ChatSession::add_swipe(std::size_t index, const std::string& text) {
     write_swipes(message, swipes, swipes.size() - 1);
     message.mes = text;
     return true;
+}
+
+Chat ChatSession::branch(std::size_t index) const {
+    if (index >= chat_.messages.size()) {
+        return Chat{};
+    }
+    Chat copy = chat_;
+    copy.messages.resize(index + 1);
+    copy.metadata.create_date = utc_now();
+    return copy;
+}
+
+bool ChatSession::add_bookmark(std::size_t index, const std::string& label) {
+    if (index >= chat_.messages.size()) {
+        return false;
+    }
+    Json& metadata = chat_.metadata.chat_metadata;
+    if (!metadata.is_object()) {
+        metadata = Json::object();
+    }
+    Json& entries = metadata["bookmarks"];
+    if (!entries.is_array()) {
+        entries = Json::array();
+    }
+    Json entry = Json::object();
+    entry["index"] = static_cast<int>(index);
+    entry["label"] = label;
+    entry["create_date"] = utc_now();
+    entries.push_back(entry);
+    return true;
+}
+
+bool ChatSession::remove_bookmark(std::size_t index) {
+    Json& metadata = chat_.metadata.chat_metadata;
+    if (!metadata.is_object()) {
+        return false;
+    }
+    const auto it = metadata.find("bookmarks");
+    if (it == metadata.end() || !it->is_array()) {
+        return false;
+    }
+    Json kept = Json::array();
+    bool removed = false;
+    for (const Json& entry : *it) {
+        auto entry_index = [&entry]() -> std::optional<long long> {
+            if (!entry.is_object()) {
+                return std::nullopt;
+            }
+            const auto field = entry.find("index");
+            if (field == entry.end()) {
+                return std::nullopt;
+            }
+            if (field->is_number_integer()) {
+                return field->get<long long>();
+            }
+            if (field->is_number_unsigned()) {
+                return static_cast<long long>(field->get<unsigned long long>());
+            }
+            return std::nullopt;
+        }();
+        if (entry_index.has_value() &&
+            *entry_index == static_cast<long long>(index)) {
+            removed = true;
+            continue;
+        }
+        kept.push_back(entry);
+    }
+    if (!removed) {
+        return false;
+    }
+    metadata["bookmarks"] = kept;
+    return true;
+}
+
+std::vector<std::pair<std::size_t, std::string>> ChatSession::bookmarks() const {
+    std::vector<std::pair<std::size_t, std::string>> result;
+    const Json& metadata = chat_.metadata.chat_metadata;
+    if (!metadata.is_object()) {
+        return result;
+    }
+    const auto it = metadata.find("bookmarks");
+    if (it == metadata.end() || !it->is_array()) {
+        return result;
+    }
+    for (const Json& entry : *it) {
+        if (!entry.is_object()) {
+            continue;
+        }
+        const auto index_it = entry.find("index");
+        const auto label_it = entry.find("label");
+        if (index_it == entry.end() || label_it == entry.end() ||
+            !label_it->is_string()) {
+            continue;
+        }
+        long long raw = -1;
+        if (index_it->is_number_integer()) {
+            raw = index_it->get<long long>();
+        } else if (index_it->is_number_unsigned()) {
+            const unsigned long long value = index_it->get<unsigned long long>();
+            if (value > 9223372036854775807ULL) {
+                continue;
+            }
+            raw = static_cast<long long>(value);
+        } else {
+            continue;
+        }
+        if (raw < 0 || chat_.messages.empty()) {
+            continue;
+        }
+        std::size_t index = static_cast<std::size_t>(raw);
+        if (index >= chat_.messages.size()) {
+            index = chat_.messages.size() - 1;
+        }
+        result.emplace_back(index, label_it->get<std::string>());
+    }
+    return result;
 }
 
 bool ChatSession::recover_draft(const ChatDraft& draft) {
