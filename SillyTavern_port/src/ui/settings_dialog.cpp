@@ -23,6 +23,15 @@ Gtk::Label* make_label(const char* text) {
     return label;
 }
 
+std::string trim_text(std::string value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) {
+        return {};
+    }
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
 }  // namespace
 
 SettingsDialog::SettingsDialog(Gtk::Window& parent,
@@ -67,6 +76,19 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     authors_note_depth_.set_increments(1.0, 1.0);
     authors_note_depth_.set_digits(0);
 
+    top_k_.set_range(0.0, 1000.0);
+    top_k_.set_increments(1.0, 10.0);
+    top_k_.set_digits(0);
+    repetition_penalty_.set_range(0.5, 2.0);
+    repetition_penalty_.set_increments(0.05, 0.5);
+    repetition_penalty_.set_digits(2);
+    presence_penalty_.set_range(-2.0, 2.0);
+    presence_penalty_.set_increments(0.05, 0.5);
+    presence_penalty_.set_digits(2);
+    frequency_penalty_.set_range(-2.0, 2.0);
+    frequency_penalty_.set_increments(0.05, 0.5);
+    frequency_penalty_.set_digits(2);
+
     persona_combo_.set_entry_text_column(0);
     persona_combo_.append("Built-in");
     try {
@@ -107,6 +129,14 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     context_template_scroll_.set_size_request(-1, 80);
     context_template_scroll_.add(context_template_);
 
+    regex_rules_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    regex_rules_scroll_.set_size_request(-1, 80);
+    regex_rules_scroll_.add(regex_rules_);
+
+    variables_scroll_.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    variables_scroll_.set_size_request(-1, 80);
+    variables_scroll_.add(variables_);
+
     int row = 0;
     grid_.attach(*make_label("API base URL"), 0, row);
     grid_.attach(base_url_, 1, row++);
@@ -146,6 +176,18 @@ SettingsDialog::SettingsDialog(Gtk::Window& parent,
     grid_.attach(instruct_format_, 1, row++);
     grid_.attach(*make_label("Context template"), 0, row);
     grid_.attach(context_template_scroll_, 1, row++);
+    grid_.attach(*make_label("Top K"), 0, row);
+    grid_.attach(top_k_, 1, row++);
+    grid_.attach(*make_label("Repetition penalty"), 0, row);
+    grid_.attach(repetition_penalty_, 1, row++);
+    grid_.attach(*make_label("Presence penalty"), 0, row);
+    grid_.attach(presence_penalty_, 1, row++);
+    grid_.attach(*make_label("Frequency penalty"), 0, row);
+    grid_.attach(frequency_penalty_, 1, row++);
+    grid_.attach(*make_label("Regex rules (JSON)"), 0, row);
+    grid_.attach(regex_rules_scroll_, 1, row++);
+    grid_.attach(*make_label("Variables (JSON)"), 0, row);
+    grid_.attach(variables_scroll_, 1, row++);
     grid_.attach(*make_label("Preset"), 0, row);
     grid_.attach(preset_combo_, 1, row++);
     auto* preset_buttons = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
@@ -349,6 +391,19 @@ void SettingsDialog::load() {
     instruct_mode_.set_active(settings_.instruct_mode);
     instruct_format_.set_active_text(settings_.instruct_format);
     context_template_.get_buffer()->set_text(settings_.context_template);
+    top_k_.set_value(settings_.top_k);
+    repetition_penalty_.set_value(settings_.repetition_penalty);
+    presence_penalty_.set_value(settings_.presence_penalty);
+    frequency_penalty_.set_value(settings_.frequency_penalty);
+    regex_rules_.get_buffer()->set_text(
+        dump_json(settings_.regex_rules.is_array() ? settings_.regex_rules : st::Json::array(), 2));
+    {
+        st::Json variables_json = st::Json::object();
+        for (const auto& [key, entry] : settings_.variables) {
+            variables_json[key] = entry;
+        }
+        variables_.get_buffer()->set_text(dump_json(variables_json, 2));
+    }
     refresh_presets();
     preset_combo_.set_active_text(
         settings_.active_preset.empty() ? "default" : settings_.active_preset);
@@ -370,6 +425,42 @@ st::Settings SettingsDialog::build_settings() const {
     candidate.authors_note_enabled = authors_note_enabled_.get_active();
     candidate.authors_note = authors_note_.get_buffer()->get_text();
     candidate.authors_note_depth = authors_note_depth_.get_value_as_int();
+    candidate.top_k = top_k_.get_value_as_int();
+    candidate.repetition_penalty = repetition_penalty_.get_value();
+    candidate.presence_penalty = presence_penalty_.get_value();
+    candidate.frequency_penalty = frequency_penalty_.get_value();
+
+    // Parse the JSON fields before any side effects (e.g. the persona
+    // store save below) so malformed input aborts the whole save and
+    // leaves the live Settings untouched. Empty text means the empty
+    // default, not an error.
+    {
+        const std::string regex_text = regex_rules_.get_buffer()->get_text();
+        if (trim_text(regex_text).empty()) {
+            candidate.regex_rules = st::Json::array();
+        } else {
+            st::Json parsed = st::parse_json(regex_text, "regex_rules");
+            if (!parsed.is_array()) {
+                throw std::runtime_error("regex_rules: root value must be an array");
+            }
+            candidate.regex_rules = std::move(parsed);
+        }
+    }
+    {
+        const std::string variables_text = variables_.get_buffer()->get_text();
+        candidate.variables.clear();
+        if (!trim_text(variables_text).empty()) {
+            const st::Json parsed = st::parse_json(variables_text, "variables");
+            if (!parsed.is_object()) {
+                throw std::runtime_error("variables: root value must be an object");
+            }
+            for (const auto& [key, entry] : parsed.items()) {
+                if (entry.is_string()) {
+                    candidate.variables[key] = entry.get<std::string>();
+                }
+            }
+        }
+    }
 
     // Keep Settings::persona_name and PersonaStore::active_name in sync so
     // the two dual sources never leave divergent selections. A corrupt
@@ -441,7 +532,7 @@ void SettingsDialog::on_response(int response) {
         hide();
     } catch (const std::exception& error) {
         st::log_write(st::LogLevel::Error, std::string("settings save failed: ") + error.what());
-        Gtk::MessageDialog message(*this, "Cannot save settings", false,
+        Gtk::MessageDialog message(*this, "Settings error", false,
                                    Gtk::MESSAGE_ERROR, Gtk::BUTTONS_OK, true);
         message.set_secondary_text(
             st::redact_secrets(error.what(), {settings_.api_key, api_key_.get_text()}));

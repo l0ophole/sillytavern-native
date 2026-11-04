@@ -1135,6 +1135,53 @@ int run_smoke_test() {
         }
 
         {
+            st::Settings sampler_settings = settings;
+            bool saved = false;
+            {
+                SettingsDialog dialog(window, paths, sampler_settings, [&saved]() { saved = true; });
+                dialog.show_all();
+                dialog.top_k_widget().set_value(40);
+                dialog.repetition_penalty_widget().set_value(1.10);
+                dialog.presence_penalty_widget().set_value(0.50);
+                dialog.frequency_penalty_widget().set_value(-0.50);
+                dialog.regex_rules_widget().get_buffer()->set_text(
+                    "[{\"pattern\":\"foo\",\"replacement\":\"bar\"}]");
+                dialog.variables_widget().get_buffer()->set_text("{\"mood\":\"calm\"}");
+                dialog.response(Gtk::RESPONSE_OK);
+            }
+            if (!saved || sampler_settings.top_k != 40 ||
+                sampler_settings.repetition_penalty != 1.10 ||
+                sampler_settings.presence_penalty != 0.50 ||
+                sampler_settings.frequency_penalty != -0.50 ||
+                !sampler_settings.regex_rules.is_array() ||
+                sampler_settings.regex_rules.size() != std::size_t(1) ||
+                sampler_settings.regex_rules[0]["pattern"] != "foo" ||
+                sampler_settings.regex_rules[0]["replacement"] != "bar" ||
+                sampler_settings.variables != std::map<std::string, std::string>{{"mood", "calm"}}) {
+                std::cerr << "smoke: sampler save failed\n";
+                return 1;
+            }
+            {
+                SettingsDialog reopened(window, paths, sampler_settings, []() {});
+                const st::Json regex = st::parse_json(
+                    reopened.regex_rules_widget().get_buffer()->get_text(), "regex");
+                const st::Json variables = st::parse_json(
+                    reopened.variables_widget().get_buffer()->get_text(), "variables");
+                if (reopened.top_k_widget().get_value_as_int() != 40 ||
+                    reopened.repetition_penalty_widget().get_value() != 1.10 ||
+                    reopened.presence_penalty_widget().get_value() != 0.50 ||
+                    reopened.frequency_penalty_widget().get_value() != -0.50 ||
+                    !regex.is_array() || regex.size() != std::size_t(1) ||
+                    regex[0]["pattern"] != "foo" || regex[0]["replacement"] != "bar" ||
+                    !variables.is_object() || variables["mood"] != "calm") {
+                    std::cerr << "smoke: sampler round-trip failed\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: sampler\n";
+        }
+
+        {
             st::CharacterEntry md_entry;
             md_entry.id = "md-bot";
             md_entry.card.name = "MdBot";

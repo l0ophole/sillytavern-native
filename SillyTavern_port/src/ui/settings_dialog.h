@@ -26,6 +26,12 @@ public:
     Gtk::CheckButton& instruct_enabled_widget() { return instruct_mode_; }
     Gtk::ComboBoxText& instruct_format_widget() { return instruct_format_; }
     Gtk::TextView& context_template_widget() { return context_template_; }
+    Gtk::SpinButton& top_k_widget() { return top_k_; }
+    Gtk::SpinButton& repetition_penalty_widget() { return repetition_penalty_; }
+    Gtk::SpinButton& presence_penalty_widget() { return presence_penalty_; }
+    Gtk::SpinButton& frequency_penalty_widget() { return frequency_penalty_; }
+    Gtk::TextView& regex_rules_widget() { return regex_rules_; }
+    Gtk::TextView& variables_widget() { return variables_; }
 
 private:
     void load();
@@ -66,6 +72,14 @@ private:
     Gtk::ComboBoxText instruct_format_;
     Gtk::TextView context_template_;
     Gtk::ScrolledWindow context_template_scroll_;
+    Gtk::SpinButton top_k_;
+    Gtk::SpinButton repetition_penalty_;
+    Gtk::SpinButton presence_penalty_;
+    Gtk::SpinButton frequency_penalty_;
+    Gtk::TextView regex_rules_;
+    Gtk::ScrolledWindow regex_rules_scroll_;
+    Gtk::TextView variables_;
+    Gtk::ScrolledWindow variables_scroll_;
 };
 
 }  // namespace ui

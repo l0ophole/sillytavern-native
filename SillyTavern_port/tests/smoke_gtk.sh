@@ -123,6 +123,11 @@ if ! grep -q 'smoke: persona corrupt' <<<"$output"; then
     exit 1
 fi
 
+if ! grep -q 'smoke: sampler' <<<"$output"; then
+    echo "smoke test failed: sampler failed" >&2
+    exit 1
+fi
+
 if ! grep -q 'smoke: markdown render' <<<"$output"; then
     echo "smoke test failed: markdown render failed" >&2
     exit 1
