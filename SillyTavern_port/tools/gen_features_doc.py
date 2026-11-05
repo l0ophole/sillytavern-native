@@ -37,6 +37,8 @@ def main() -> int:
     critical = [feature for feature in features if feature["critical"]]
     target = [feature for feature in features if feature["target"] == "0.1"]
     target_v011 = [feature for feature in features if feature["target"] == "0.1.1"]
+    target_v02 = [feature for feature in features if feature["target"] == "0.2"]
+    target_v03 = [feature for feature in features if feature["target"] == "0.3"]
     ported = [feature for feature in features if feature["status"] == "ported"]
 
     lines: list[str] = []
@@ -62,6 +64,8 @@ def main() -> int:
     add(f"| Critical features | {len(critical)} |")
     add(f"| v0.1 target features | {len(target)} |")
     add(f"| v0.1.1 target features | {len(target_v011)} |")
+    add(f"| v0.2 target features | {len(target_v02)} |")
+    add(f"| v0.3 target features | {len(target_v03)} |")
     add(f"| Ported features | {len(ported)} |")
     add("")
     add("Status values in the registry: `planned` means the feature is visible in")
@@ -99,7 +103,7 @@ def main() -> int:
             deps = ", ".join(feature["depends_on"]) or "—"
             dependants = ", ".join(sorted(required_by[feature["id"]])) or "—"
             critical_mark = "**yes**" if feature["critical"] else "no"
-            plan = {"0.1": "v0.1", "0.1.1": "v0.1.1"}.get(feature["target"], "later")
+            plan = {"0.1": "v0.1", "0.1.1": "v0.1.1", "0.2": "v0.2", "0.3": "v0.3"}.get(feature["target"], "later")
             add(
                 f"| {feature['id']} | {feature['name']} | {critical_mark} | {plan} | "
                 f"{feature['status']} | {deps} | {dependants} |"

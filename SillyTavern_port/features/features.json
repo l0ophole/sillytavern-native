@@ -496,8 +496,8 @@
       "name": "Instruct mode",
       "description": "Model-specific instruct formatting and stop sequences.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -508,8 +508,8 @@
       "name": "Context templates",
       "description": "Configurable story-string and chat-context templates.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -594,8 +594,8 @@
       "name": "Variables",
       "description": "Local and global variables available to prompts and scripts.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -618,8 +618,8 @@
       "name": "Regex transformations",
       "description": "Configurable input/output regex rewriting.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -669,8 +669,8 @@
       "name": "Persona manager",
       "description": "Multiple user personas with descriptions and avatars.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "P05",
         "C03"
@@ -694,8 +694,8 @@
       "name": "World Info engine",
       "description": "Keyword-triggered lore injection with budgets and recursion.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -706,8 +706,8 @@
       "name": "World Info editor and import",
       "description": "Create, edit, import, and export lorebooks.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C31"
       ]
@@ -730,8 +730,8 @@
       "name": "Prompt manager and presets",
       "description": "Ordered prompt sections, enable/disable, and per-connection presets.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C03"
       ]
@@ -742,8 +742,8 @@
       "name": "Preset import and export",
       "description": "Import/export prompt and sampler presets.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C34"
       ]
@@ -780,8 +780,8 @@
       "name": "Advanced sampler settings",
       "description": "Top-k, top-p, repetition penalties, DRY, mirostat, and backend-specific samplers.",
       "critical": false,
-      "target": "later",
-      "status": "planned",
+      "target": "0.3",
+      "status": "ported",
       "depends_on": [
         "C04"
       ]

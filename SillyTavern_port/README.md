@@ -73,6 +73,36 @@ and new-chat writes remain synchronous on the GTK thread and are size-capped:
 for compact drafts. Streaming draft writes are atomic and throttled to one per
 second, with each write fsynced on the GTK thread.
 
+## v0.3.0 scope
+
+- World Info: keyword-triggered lore injection from SillyTavern-compatible
+  lorebooks (`worldinfo/*.json`), with a lorebook editor and import/export.
+  Triggered entries are deduplicated, sorted by position, and bounded by
+  recursion (max 5), entry count (max 32), per-entry content (4096 bytes),
+  and total injected content (32768 bytes). Lorebook files are capped at
+  16 MiB.
+- Personas: multiple user personas stored in `personas.json`; the active
+  persona's description is injected once into the prompt and `{{user}}`
+  expands to the persona name, with empty/missing personas leaving the
+  prompt unchanged.
+- Instruct/templates: instruct modes (`plain`, `chatml`, `llama`) format
+  history messages, and a macro-expanded context template can replace the
+  default leading system text while preserving prior prompt order at
+  defaults.
+- Prompt manager/presets: ordered, enable/disable prompt sections plus
+  per-connection presets stored as plain JSON under `presets/*.json`
+  (16 MiB cap), with import/export and an active-preset selector.
+- Advanced sampling/regex/variables: top-k, repetition/presence/frequency
+  penalties, DRY and mirostat sampling fields, bounded regex rewriting of
+  history display copies (pattern max 512 bytes, replacement max 4096
+  bytes, at most 16 rules), and `{{var:name}}` variables expanded after
+  the core macros.
+
+Chat and lorebook files stay SillyTavern-compatible JSONL/JSON with
+unknown fields preserved: SillyTavern-authored chats and lorebooks load
+here, and files produced by this version load in SillyTavern for the
+fields this milestone writes.
+
 Known v0.1.1 limitations:
 
 - File I/O and JSONL parsing run on a worker, but transcript rendering
