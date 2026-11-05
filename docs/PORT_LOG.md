@@ -40,6 +40,16 @@ Master plan: `docs/plans/00-v0.1-master-plan.md`
 | C14 Author's note | 10-v0.2-chat-depth.md | yes | yes | 5a433ba, fd3c9d5 | Settings fields (enabled/note/depth 0..100, 4096-byte cap), `insert_at_depth` prompt injection, settings-dialog controls |
 | C17 Markdown and rich formatting | 10-v0.2-chat-depth.md | yes | yes | e5bf40b, 76955a9 | GTK-free `markdown_to_pango` safe subset with full HTML escaping; assistant messages render via `insert_markup` |
 | C11 Chat backups | 10-v0.2-chat-depth.md | yes | yes | 1808242, 702511e, 415db27 | `BackupManager` under `chats/.backups/`, 512 MiB cap, 10 kept, all-or-nothing restore, menu backup/restore UI |
+| C31 World Info engine | 11-v0.3-prompt-depth.md | yes | yes | 9bc0757 | GTK-free `world_info` module, case-insensitive keyword triggers, recursion capped at 5, 32 entries, 4096-byte entries, 32768-byte total |
+| C32 World Info editor and import | 11-v0.3-prompt-depth.md | yes | yes | d36caeb | `WorldInfoDialog` with Add/Edit/Delete and Import/Export to `worldinfo/*.json` (16 MiB cap, sanitized names, overwrite confirmation) |
+| C29 Persona manager | 11-v0.3-prompt-depth.md | yes | yes | ad24218, 57beb6c, 36abe9e | `PersonaStore` in `personas.json`, active persona injected once, `{{user}}` expands to persona name, manager UI in `MainWindow` |
+| C15 Instruct mode | 11-v0.3-prompt-depth.md | yes | yes | 606e332, 57beb6c | `format_instruct_message` for `plain`/`chatml`/`llama`, settings-dialog controls, defaults preserve prior prompt order |
+| C16 Context templates | 11-v0.3-prompt-depth.md | yes | yes | 606e332, 57beb6c | Macro-expanded `context_template` (8192-byte cap) replaces leading system text when instruct mode is on |
+| C34 Prompt manager and presets | 11-v0.3-prompt-depth.md | yes | yes | 65a68d6, 5a5a52c | Ordered prompt sections via `PromptManager`, enable/disable and reorder UI, default 9-section order matches v0.2 |
+| C35 Preset import and export | 11-v0.3-prompt-depth.md | yes | yes | 5a5a52c | Presets as plain JSON under `presets/*.json` (16 MiB cap), sanitized names, overwrite confirmation, active-preset selection |
+| C38 Advanced sampler settings | 11-v0.3-prompt-depth.md | yes | yes | d17a44a, 22fc9df | `top_k`, repetition/presence/frequency penalties, DRY, mirostat with clamps, settings-dialog spin buttons |
+| C25 Regex transformations | 11-v0.3-prompt-depth.md | yes | yes | d17a44a, 22fc9df | Bounded `apply_regex` (pattern 512 bytes, replacement 4096 bytes, 16 rules) on history display copies only |
+| C23 Variables | 11-v0.3-prompt-depth.md | yes | yes | d17a44a, 22fc9df | `{{var:name}}` expansion after core macros, unknown names left literal, settings-dialog JSON editor |
 
 ## v0.1 completion
 
@@ -126,6 +136,48 @@ membership check, the `0.2.0` version string, the GTK-free core, and a
 clean upstream tree). `tests/alpine_build.sh` repeats build, unit,
 integration, and smoke checks on Alpine 3.20 (musl), printing
 `build ok`, `tests ok`, `integration ok`, and `smoke ok`.
+
+## v0.3.0 completion
+
+v0.3.0 adds prompt depth: World Info, personas, instruct/templates,
+prompt manager/presets, and advanced sampling/regex/variables. The
+feature registry moves to 105 features, 36 ported, 69 planned, with
+target sets 19 `0.1`, 2 `0.1.1`, 5 `0.2`, and 10 `0.3`.
+
+- C31 World Info engine (`9bc0757`): bounded, deduplicated, position-sorted
+  lore injection with 5-recursion, 4096-byte entry, and 32768-byte total caps.
+- C32 World Info editor and import (`d36caeb`): lorebook dialog with
+  Add/Edit/Delete and Import/Export, 16 MiB cap, sanitized filenames.
+- C29 Persona manager (`ad24218`, `57beb6c`, `36abe9e`): `personas.json`
+  store, single persona injection, `{{user}}` persona expansion.
+- C15 Instruct mode (`606e332`, `57beb6c`): `plain`/`chatml`/`llama`
+  history formatting, unknown formats clamp to `plain`.
+- C16 Context templates (`606e332`, `57beb6c`): template replaces leading
+  system text when instruct mode is on; defaults preserve v0.2 output.
+- C34 Prompt manager and presets (`65a68d6`, `5a5a52c`): ordered sections,
+  enable/disable and reorder, default v0.2 order when no manager is set.
+- C35 Preset import and export (`5a5a52c`): plain-JSON presets under
+  `presets/` (16 MiB cap), overwrite confirmation, active-preset selection.
+- C38 Advanced sampler settings (`d17a44a`, `22fc9df`): top-k, repetition,
+  presence/frequency penalties, DRY, and mirostat with clamps.
+- C25 Regex transformations (`d17a44a`, `22fc9df`): bounded rules applied
+  to history display copies only; malformed patterns are skipped.
+- C23 Variables (`d17a44a`, `22fc9df`): `{{var:name}}` expansion after
+  core macros; unknown variables stay literal.
+
+Chat and lorebook files remain SillyTavern-compatible; files written by
+this version load in SillyTavern for the fields this milestone writes,
+and SillyTavern-authored chats and lorebooks still load here.
+
+Gate evidence: `tests/verify_v01.sh` passes with
+`v0.3.0 verification: PASS` (sanitizer tests, warning-free clean build,
+unit tests, integration tests, 27 smoke markers, menuconfig selftest,
+the 105/36/69/19+2+5+10 feature counts with the C15/C16/C23/C25/C29/
+C31/C32/C34/C35/C38 membership check, the `0.3.0` version string, the
+GTK-free core, and a clean upstream tree). `tests/alpine_build.sh`
+repeats build, unit, integration, and smoke checks on Alpine 3.20
+(musl), printing `build ok`, `tests ok`, `integration ok`, and
+`smoke ok`.
 
 ## Known v0.1.1 limitations
 

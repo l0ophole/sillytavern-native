@@ -4,10 +4,13 @@
 #include "core/chat_store.h"
 #include "core/chat_types.h"
 #include "core/openai_client.h"
+#include "core/persona.h"
 #include "core/prompt.h"
 #include "core/settings.h"
+#include "core/world_info.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,6 +32,25 @@ public:
     Settings& settings() { return settings_; }
 
     std::vector<PromptMessage> prompt_messages() const;
+    void set_world_info_book(const WorldInfoBook& book);
+    const WorldInfoBook& world_info_book() const { return world_info_book_; }
+    // Loads worldinfo/<book>.json (sanitized, 16 MiB cap) from dir.
+    // Missing file leaves an empty book; parse/read errors throw.
+    void load_world_info_book(const std::filesystem::path& dir, const std::string& book_name);
+    void set_persona_store(const PersonaStore& store);
+    const PersonaStore* persona_store() const;
+    void load_persona_store(const std::filesystem::path& data_root);
+    void save_persona_store(const std::filesystem::path& data_root) const;
+    // When set, prompt_messages() builds through this manager (enabled
+    // sections only) and request() merges sampling_overrides over the
+    // settings sampling (preset wins, result clamped).
+    void set_prompt_manager(const PromptManager& manager, const Json& sampling_overrides);
+    const PromptManager* prompt_manager() const;
+    const Json& sampling_overrides() const { return sampling_overrides_; }
+    // Loads presets/<name>.json (sanitized, 16 MiB cap). Missing file
+    // installs the default manager with no overrides; parse/read errors throw.
+    void load_prompt_preset(const std::filesystem::path& presets_dir,
+                            const std::string& preset_name);
     int estimated_tokens() const { return estimated_tokens_; }
     bool trimmed() const { return trimmed_; }
 
@@ -69,6 +91,12 @@ private:
     std::string character_;
     std::string filename_;
     Chat chat_;
+    WorldInfoBook world_info_book_;
+    PersonaStore persona_store_;
+    bool persona_store_set_ = false;
+    PromptManager prompt_manager_;
+    Json sampling_overrides_ = Json::object();
+    bool prompt_manager_set_ = false;
     mutable int estimated_tokens_ = 0;
     mutable bool trimmed_ = false;
 };

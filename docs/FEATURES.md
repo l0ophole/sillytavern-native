@@ -18,7 +18,9 @@ dependency edge is listed in both directions.
 | Critical features | 19 |
 | v0.1 target features | 19 |
 | v0.1.1 target features | 2 |
-| Ported features | 26 |
+| v0.2 target features | 5 |
+| v0.3 target features | 10 |
+| Ported features | 36 |
 
 Status values in the registry: `planned` means the feature is visible in
 `make menuconfig` but disabled; `ported` means it is implemented, builds,
@@ -132,38 +134,38 @@ feature IDs; names are in the same table.
 | C04 | OpenAI-compatible streaming generation | **yes** | v0.1 | ported | P07, C03, C39 | B07, C05, C12, C13, C18, C19, C20, C26, C36, C37, C38, U07 |
 | C05 | Message actions | **yes** | v0.1 | ported | C01, C02, C04 | C07 |
 | C06 | Context budgeting and trimming | **yes** | v0.1 | ported | C03, P05 | C33 |
-| C07 | Swipes and alternate responses | no | later | ported | C05 | — |
-| C08 | Branching and bookmarks | no | later | ported | C01 | — |
+| C07 | Swipes and alternate responses | no | v0.2 | ported | C05 | — |
+| C08 | Branching and bookmarks | no | v0.2 | ported | C01 | — |
 | C09 | Group chats | no | later | planned | C01, C03 | — |
 | C10 | Chat search | no | later | planned | C01 | — |
-| C11 | Chat backups | no | later | ported | C01 | U15 |
+| C11 | Chat backups | no | v0.2 | ported | C01 | U15 |
 | C12 | Auto-continue | no | later | planned | C04 | — |
 | C13 | Impersonation | no | later | planned | C03, C04 | — |
-| C14 | Author's note | no | later | ported | C03 | — |
-| C15 | Instruct mode | no | later | planned | C03 | — |
-| C16 | Context templates | no | later | planned | C03 | — |
-| C17 | Markdown and rich formatting | no | later | ported | C02 | — |
+| C14 | Author's note | no | v0.2 | ported | C03 | — |
+| C15 | Instruct mode | no | v0.3 | ported | C03 | — |
+| C16 | Context templates | no | v0.3 | ported | C03 | — |
+| C17 | Markdown and rich formatting | no | v0.2 | ported | C02 | — |
 | C18 | Reasoning display | no | later | planned | C04 | — |
 | C19 | Tool calling | no | later | planned | C04 | — |
 | C20 | Logprobs display | no | later | planned | C04 | — |
 | C21 | Attachments and inline images | no | later | planned | C02, D11 | — |
 | C22 | Slash commands and STscript | no | later | planned | C02, C03 | — |
-| C23 | Variables | no | later | planned | C03 | — |
+| C23 | Variables | no | v0.3 | ported | C03 | — |
 | C24 | Quick replies | no | later | planned | C02 | — |
-| C25 | Regex transformations | no | later | planned | C03 | — |
+| C25 | Regex transformations | no | v0.3 | ported | C03 | — |
 | C26 | Summarize and memory | no | later | planned | C03, C04 | — |
 | C27 | Vector storage and RAG | no | later | planned | C03, P07 | B08, C28 |
 | C28 | Data bank | no | later | planned | D11, C27 | — |
-| C29 | Persona manager | no | later | planned | P05, C03 | — |
+| C29 | Persona manager | no | v0.3 | ported | P05, C03 | — |
 | C30 | User identity | **yes** | v0.1 | ported | P05 | C03 |
-| C31 | World Info engine | no | later | planned | C03 | C32, D07 |
-| C32 | World Info editor and import | no | later | planned | C31 | — |
+| C31 | World Info engine | no | v0.3 | ported | C03 | C32, D07 |
+| C32 | World Info editor and import | no | v0.3 | ported | C31 | — |
 | C33 | Exact tokenizer and token counter | no | later | planned | C06 | U19 |
-| C34 | Prompt manager and presets | no | later | planned | C03 | C35 |
-| C35 | Preset import and export | no | later | planned | C34 | — |
+| C34 | Prompt manager and presets | no | v0.3 | ported | C03 | C35 |
+| C35 | Preset import and export | no | v0.3 | ported | C34 | — |
 | C36 | Connection profiles | no | later | planned | P05, C04 | — |
 | C37 | Custom headers and proxy | no | later | planned | P07, C04 | — |
-| C38 | Advanced sampler settings | no | later | planned | C04 | — |
+| C38 | Advanced sampler settings | no | v0.3 | ported | C04 | — |
 | C39 | Basic sampling controls | **yes** | v0.1 | ported | P05 | C04 |
 | C40 | Prompt post-processing | no | later | planned | C03 | — |
 

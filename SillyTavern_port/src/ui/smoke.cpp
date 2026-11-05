@@ -5,6 +5,8 @@
 #include "core/chat_session.h"
 #include "core/identity.h"
 #include "core/json.h"
+#include "core/persona.h"
+#include "core/prompt_manager.h"
 #include "ui/avatar.h"
 #include "ui/main_window.h"
 #include "ui/settings_dialog.h"
@@ -17,6 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -1026,6 +1029,159 @@ int run_smoke_test() {
         }
 
         {
+            st::Settings persona_settings = settings;
+            bool saved = false;
+            {
+                SettingsDialog dialog(window, paths, persona_settings, [&saved]() { saved = true; });
+                dialog.show_all();
+                dialog.persona_widget().set_active_text("Rook");
+                // Typing a brand-new name into an editable ComboBoxText does
+                // not add it to the list, so drive it like a selectable row:
+                // ensure the name exists, then activate it.
+                {
+                    bool present = false;
+                    if (dialog.persona_widget().get_model()) {
+                        for (const auto& row : dialog.persona_widget().get_model()->children()) {
+                            Glib::ustring value;
+                            row.get_value(0, value);
+                            if (value == "Rook") {
+                                present = true;
+                            }
+                        }
+                    }
+                    if (!present) {
+                        dialog.persona_widget().append("Rook");
+                    }
+                }
+                dialog.persona_widget().set_active(1);
+                dialog.persona_description_widget().get_buffer()->set_text("Calm guide.");
+                dialog.instruct_enabled_widget().set_active(true);
+                dialog.instruct_format_widget().set_active(1);
+                dialog.context_template_widget().get_buffer()->set_text("{{char}} greets {{user}}");
+                dialog.response(Gtk::RESPONSE_OK);
+            }
+            if (!saved || persona_settings.persona_name != "Rook" ||
+                !persona_settings.instruct_mode ||
+                persona_settings.instruct_format != "chatml" ||
+                persona_settings.context_template != "{{char}} greets {{user}}") {
+                std::cerr << "smoke: persona save failed\n";
+                return 1;
+            }
+            // Persona description syncs into personas.json via PersonaStore.
+            {
+                bool found_description = false;
+                try {
+                    const st::PersonaStore store = st::PersonaStore::load(paths.data_dir / "personas.json");
+                    if (store.active_name == "Rook" && store.active() != nullptr &&
+                        store.active()->description == "Calm guide.") {
+                        found_description = true;
+                    }
+                } catch (const std::exception&) {
+                }
+                if (!found_description) {
+                    std::cerr << "smoke: persona store save failed\n";
+                    return 1;
+                }
+            }
+            {
+                SettingsDialog reopened(window, paths, persona_settings, []() {});
+                if (reopened.persona_widget().get_active_text() != "Rook" ||
+                    reopened.persona_description_widget().get_buffer()->get_text() != "Calm guide." ||
+                    !reopened.instruct_enabled_widget().get_active() ||
+                    reopened.instruct_format_widget().get_active_text() != "chatml" ||
+                    reopened.context_template_widget().get_buffer()->get_text() != "{{char}} greets {{user}}") {
+                    std::cerr << "smoke: persona round-trip failed\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: persona\n";
+        }
+
+        {
+            // A corrupt personas.json must survive a manager save attempt:
+            // the dialog reports the load error and save() refuses.
+            const std::filesystem::path personas_file = paths.data_dir / "personas.json";
+            st::write_file_atomic(personas_file, "{");
+            st::Settings corrupt_settings = settings;
+            corrupt_settings.persona_name = "Rook";
+            bool refused = false;
+            {
+                PersonaManagerDialog manager(window, paths, corrupt_settings, []() {});
+                if (manager.load_error().empty()) {
+                    std::cerr << "smoke: persona corrupt load error missing\n";
+                    return 1;
+                }
+                try {
+                    manager.save();
+                } catch (const std::exception&) {
+                    refused = true;
+                }
+            }
+            if (!refused) {
+                std::cerr << "smoke: persona corrupt save not refused\n";
+                return 1;
+            }
+            std::string preserved;
+            {
+                std::ifstream input(personas_file);
+                preserved.assign(std::istreambuf_iterator<char>(input),
+                                 std::istreambuf_iterator<char>());
+            }
+            if (preserved != "{" || corrupt_settings.persona_name != "Rook") {
+                std::cerr << "smoke: persona corrupt file clobbered\n";
+                return 1;
+            }
+            std::cout << "smoke: persona corrupt\n";
+        }
+
+        {
+            st::Settings sampler_settings = settings;
+            bool saved = false;
+            {
+                SettingsDialog dialog(window, paths, sampler_settings, [&saved]() { saved = true; });
+                dialog.show_all();
+                dialog.top_k_widget().set_value(40);
+                dialog.repetition_penalty_widget().set_value(1.10);
+                dialog.presence_penalty_widget().set_value(0.50);
+                dialog.frequency_penalty_widget().set_value(-0.50);
+                dialog.regex_rules_widget().get_buffer()->set_text(
+                    "[{\"pattern\":\"foo\",\"replacement\":\"bar\"}]");
+                dialog.variables_widget().get_buffer()->set_text("{\"mood\":\"calm\"}");
+                dialog.response(Gtk::RESPONSE_OK);
+            }
+            if (!saved || sampler_settings.top_k != 40 ||
+                sampler_settings.repetition_penalty != 1.10 ||
+                sampler_settings.presence_penalty != 0.50 ||
+                sampler_settings.frequency_penalty != -0.50 ||
+                !sampler_settings.regex_rules.is_array() ||
+                sampler_settings.regex_rules.size() != std::size_t(1) ||
+                sampler_settings.regex_rules[0]["pattern"] != "foo" ||
+                sampler_settings.regex_rules[0]["replacement"] != "bar" ||
+                sampler_settings.variables != std::map<std::string, std::string>{{"mood", "calm"}}) {
+                std::cerr << "smoke: sampler save failed\n";
+                return 1;
+            }
+            {
+                SettingsDialog reopened(window, paths, sampler_settings, []() {});
+                const st::Json regex = st::parse_json(
+                    reopened.regex_rules_widget().get_buffer()->get_text(), "regex");
+                const st::Json variables = st::parse_json(
+                    reopened.variables_widget().get_buffer()->get_text(), "variables");
+                if (reopened.top_k_widget().get_value_as_int() != 40 ||
+                    reopened.repetition_penalty_widget().get_value() != 1.10 ||
+                    reopened.presence_penalty_widget().get_value() != 0.50 ||
+                    reopened.frequency_penalty_widget().get_value() != -0.50 ||
+                    !regex.is_array() || regex.size() != std::size_t(1) ||
+                    regex[0]["pattern"] != "foo" || regex[0]["replacement"] != "bar" ||
+                    !variables.is_object() || variables["mood"] != "calm") {
+                    std::cerr << "smoke: sampler round-trip failed\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: sampler\n";
+        }
+
+        {
             st::CharacterEntry md_entry;
             md_entry.id = "md-bot";
             md_entry.card.name = "MdBot";
@@ -1098,6 +1254,274 @@ int run_smoke_test() {
                 return 1;
             }
             std::cout << "smoke: backup round trip\n";
+        }
+
+        {
+            st::Settings wi_settings = settings;
+            wi_settings.world_info_enabled = true;
+            wi_settings.world_info_book = "lorebook";
+            {
+                WorldInfoDialog dialog(window, paths, wi_settings, []() {});
+                dialog.show_all();
+                st::WorldInfoEntry dragon;
+                dragon.key = "dragon";
+                dragon.comment = "Dragon lore";
+                dragon.content = "Dragons hoard gold and breathe fire.";
+                dragon.enabled = true;
+                dialog.add_entry(dragon);
+                dialog.save();
+            }
+            {
+                WorldInfoDialog reopened(window, paths, wi_settings, []() {});
+                reopened.load();
+                if (reopened.book().entries.size() != std::size_t(1) ||
+                    reopened.book().entries[0].key != "dragon") {
+                    std::cerr << "smoke: world info round-trip failed\n";
+                    return 1;
+                }
+                st::Chat wi_chat = chats.create(entry.id,
+                                                  st::normalize_user_name(settings.user_name),
+                                                  entry.card.first_mes);
+                st::ChatSession wi_session(entry.card,
+                                           wi_settings,
+                                           chats,
+                                           entry.id,
+                                           "smoke-world-info.jsonl",
+                                           wi_chat);
+                wi_session.set_world_info_book(reopened.book());
+                wi_session.append_user("Tell me about the dragon.");
+                bool found_lore = false;
+                for (const st::PromptMessage& message : wi_session.prompt_messages()) {
+                    if (message.content.find("Dragons hoard gold") != std::string::npos) {
+                        found_lore = true;
+                    }
+                }
+                if (!found_lore) {
+                    std::cerr << "smoke: world info lore not in prompt\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: world info\n";
+        }
+
+        {
+            st::Settings preset_settings = settings;
+            preset_settings.active_preset = "promo";
+            bool saved = false;
+            {
+                PromptManagerDialog manager(window, paths, preset_settings,
+                                            [&saved]() { saved = true; });
+                manager.show_all();
+                manager.set_preset_name("promo");
+                st::PromptSection custom;
+                custom.id = "custom";
+                custom.title = "Custom";
+                custom.content = "Be nice.";
+                custom.enabled = true;
+                custom.order = 0;
+                manager.add_section(custom);
+                manager.save();
+            }
+            if (!saved) {
+                std::cerr << "smoke: prompt preset save failed\n";
+                return 1;
+            }
+            {
+                SettingsDialog reopened(window, paths, preset_settings, []() {});
+                bool found = false;
+                if (reopened.preset_widget().get_model()) {
+                    for (const auto& row : reopened.preset_widget().get_model()->children()) {
+                        Glib::ustring value;
+                        row.get_value(0, value);
+                        if (value == "promo") {
+                            found = true;
+                        }
+                    }
+                }
+                if (!found) {
+                    std::cerr << "smoke: prompt preset combo missing promo\n";
+                    return 1;
+                }
+                const std::string text = st::read_file_limited(
+                    paths.presets_dir / "promo.json", 16u * 1024u * 1024u, "preset");
+                const st::PromptPreset loaded =
+                    st::PromptPreset::from_json(st::parse_json(text, "preset"));
+                if (loaded.sections.size() != std::size_t(1) ||
+                    loaded.sections[0].id != "custom") {
+                    std::cerr << "smoke: prompt preset section count mismatch\n";
+                    return 1;
+                }
+            }
+            std::cout << "smoke: prompt preset\n";
+        }
+
+        {
+            // Live wiring: ChatView loads personas.json and the active
+            // preset from disk; the resulting prompt carries the persona
+            // description and preset system text, omits the disabled
+            // description section, and the preset sampling override wins.
+            st::PersonaStore live_personas;
+            st::Persona mia;
+            mia.name = "Mia";
+            mia.description = "Brave explorer.";
+            live_personas.personas.push_back(mia);
+            live_personas.active_name = "Mia";
+            live_personas.save(paths.data_dir / "personas.json");
+
+            st::PromptPreset live_preset;
+            live_preset.name = "smoke-live";
+            st::PromptSection live_system;
+            live_system.id = "system";
+            live_system.title = "System";
+            live_system.content = "Live preset system.";
+            live_system.enabled = true;
+            live_system.order = 0;
+            st::PromptSection live_description;
+            live_description.id = "description";
+            live_description.title = "Description";
+            live_description.content = "";
+            live_description.enabled = false;
+            live_description.order = 1;
+            st::PromptSection live_persona;
+            live_persona.id = "persona";
+            live_persona.title = "Persona";
+            live_persona.content = "";
+            live_persona.enabled = true;
+            live_persona.order = 2;
+            live_preset.sections = {live_system, live_description, live_persona};
+            live_preset.sampling_overrides = st::Json::object();
+            live_preset.sampling_overrides["temperature"] = 0.25;
+            st::write_file_atomic(paths.presets_dir / "smoke-live.json",
+                                  st::dump_json(live_preset.to_json(), 2) + "\n");
+
+            st::Settings live_settings = settings;
+            live_settings.active_preset = "smoke-live";
+            live_settings.persona_name = "Mia";
+            std::string live_status;
+            ChatView live_view(chats, live_settings,
+                               [&live_status](const std::string& text) { live_status = text; },
+                               &paths);
+            live_view.show_all();
+            if (!live_view.set_character(entry)) {
+                std::cerr << "smoke: prompt live set_character failed: " << live_status << '\n';
+                return 1;
+            }
+            const st::Persona* view_active = live_view.persona_store().active();
+            if (view_active == nullptr || view_active->description != "Brave explorer.") {
+                std::cerr << "smoke: prompt live persona not loaded into view\n";
+                return 1;
+            }
+            bool view_has_system = false;
+            bool view_has_description = false;
+            for (const st::PromptSection& section :
+                 live_view.prompt_manager().enabled_sections()) {
+                if (section.id == "system" &&
+                    section.content == "Live preset system.") {
+                    view_has_system = true;
+                }
+                if (section.id == "description") {
+                    view_has_description = true;
+                }
+            }
+            if (!view_has_system || view_has_description) {
+                std::cerr << "smoke: prompt live preset not loaded into view\n";
+                return 1;
+            }
+            st::Chat live_chat = chats.create(entry.id,
+                                              st::normalize_user_name(settings.user_name),
+                                              entry.card.first_mes);
+            st::ChatSession live_session(entry.card, live_settings, chats, entry.id,
+                                         "smoke-live.jsonl", live_chat);
+            live_session.load_persona_store(paths.data_dir);
+            live_session.load_prompt_preset(paths.presets_dir, live_settings.active_preset);
+            live_session.append_user("Hello.");
+            bool found_persona = false;
+            bool found_preset_system = false;
+            for (const st::PromptMessage& message : live_session.prompt_messages()) {
+                if (message.content.find("User persona (Mia): Brave explorer.") !=
+                    std::string::npos) {
+                    found_persona = true;
+                }
+                if (message.content.find("Live preset system.") != std::string::npos) {
+                    found_preset_system = true;
+                }
+                if (message.content.find("Synthetic character card") != std::string::npos) {
+                    std::cerr << "smoke: prompt live disabled section leaked\n";
+                    return 1;
+                }
+            }
+            if (!found_persona || !found_preset_system ||
+                live_session.request().sampling.temperature != 0.25) {
+                std::cerr << "smoke: prompt live prompt mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: prompt live\n";
+        }
+
+        {
+            // Corrupt world-info file must survive a dialog save attempt.
+            const std::filesystem::path lore_file =
+                paths.world_info_dir / "corrupt-lore.json";
+            st::write_file_atomic(lore_file, "{");
+            st::Settings corrupt_wi = settings;
+            corrupt_wi.world_info_book = "corrupt-lore";
+            bool wi_refused = false;
+            {
+                WorldInfoDialog dialog(window, paths, corrupt_wi, []() {});
+                if (dialog.load_error().empty()) {
+                    std::cerr << "smoke: world info corrupt load error missing\n";
+                    return 1;
+                }
+                try {
+                    dialog.save();
+                } catch (const std::exception&) {
+                    wi_refused = true;
+                }
+            }
+            std::string preserved;
+            {
+                std::ifstream input(lore_file);
+                preserved.assign(std::istreambuf_iterator<char>(input),
+                                 std::istreambuf_iterator<char>());
+            }
+            if (!wi_refused || preserved != "{") {
+                std::cerr << "smoke: world info corrupt file clobbered\n";
+                return 1;
+            }
+            std::cout << "smoke: world info corrupt\n";
+        }
+
+        {
+            // Corrupt preset file must survive a dialog save attempt.
+            const std::filesystem::path preset_file =
+                paths.presets_dir / "corrupt-preset.json";
+            st::write_file_atomic(preset_file, "{");
+            st::Settings corrupt_preset = settings;
+            corrupt_preset.active_preset = "corrupt-preset";
+            bool preset_refused = false;
+            {
+                PromptManagerDialog dialog(window, paths, corrupt_preset, []() {});
+                if (dialog.load_error().empty()) {
+                    std::cerr << "smoke: prompt preset corrupt load error missing\n";
+                    return 1;
+                }
+                try {
+                    dialog.save();
+                } catch (const std::exception&) {
+                    preset_refused = true;
+                }
+            }
+            std::string preserved;
+            {
+                std::ifstream input(preset_file);
+                preserved.assign(std::istreambuf_iterator<char>(input),
+                                 std::istreambuf_iterator<char>());
+            }
+            if (!preset_refused || preserved != "{") {
+                std::cerr << "smoke: prompt preset corrupt file clobbered\n";
+                return 1;
+            }
+            std::cout << "smoke: prompt preset corrupt\n";
         }
 
         window.hide();

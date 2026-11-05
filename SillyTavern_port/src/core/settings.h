@@ -3,6 +3,7 @@
 #include "core/json.h"
 
 #include <filesystem>
+#include <map>
 #include <string>
 
 namespace st {
@@ -16,6 +17,7 @@ struct Settings {
     int max_tokens = 300;
     int context_size = 4095;
     std::string user_name = "User";
+    std::string persona_name = "";
     std::string system_prompt =
         "Write {{char}}'s next reply in a fictional chat between {{char}} and {{user}}.";
     bool stream = true;
@@ -25,6 +27,20 @@ struct Settings {
     bool authors_note_enabled = false;
     std::string authors_note;
     int authors_note_depth = 4;
+    bool instruct_mode = false;
+    std::string instruct_format = "plain";
+    std::string context_template;
+    bool world_info_enabled = false;
+    std::string world_info_book = "lorebook";
+    std::string active_preset = "default";
+    int top_k = 0;
+    double repetition_penalty = 1.0;
+    double presence_penalty = 0.0;
+    double frequency_penalty = 0.0;
+    double dry_multiplier = 0.0;
+    double mirostat_tau = 5.0;
+    Json regex_rules = Json::array();
+    std::map<std::string, std::string> variables;
     Json unknown = Json::object();
 
     static Settings load(const std::filesystem::path& path);

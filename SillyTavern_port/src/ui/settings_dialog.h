@@ -20,9 +20,24 @@ public:
     Gtk::CheckButton& authors_note_enabled_widget() { return authors_note_enabled_; }
     Gtk::TextView& authors_note_widget() { return authors_note_; }
     Gtk::SpinButton& authors_note_depth_widget() { return authors_note_depth_; }
+    Gtk::ComboBoxText& persona_widget() { return persona_combo_; }
+    Gtk::ComboBoxText& preset_widget() { return preset_combo_; }
+    Gtk::TextView& persona_description_widget() { return persona_description_; }
+    Gtk::CheckButton& instruct_enabled_widget() { return instruct_mode_; }
+    Gtk::ComboBoxText& instruct_format_widget() { return instruct_format_; }
+    Gtk::TextView& context_template_widget() { return context_template_; }
+    Gtk::SpinButton& top_k_widget() { return top_k_; }
+    Gtk::SpinButton& repetition_penalty_widget() { return repetition_penalty_; }
+    Gtk::SpinButton& presence_penalty_widget() { return presence_penalty_; }
+    Gtk::SpinButton& frequency_penalty_widget() { return frequency_penalty_; }
+    Gtk::TextView& regex_rules_widget() { return regex_rules_; }
+    Gtk::TextView& variables_widget() { return variables_; }
 
 private:
     void load();
+    void refresh_presets();
+    void on_preset_import();
+    void on_preset_export();
     st::Settings build_settings() const;
     void on_response(int response) override;
 
@@ -47,6 +62,24 @@ private:
     Gtk::TextView authors_note_;
     Gtk::ScrolledWindow authors_note_scroll_;
     Gtk::SpinButton authors_note_depth_;
+    Gtk::ComboBoxText persona_combo_{true};
+    Gtk::ComboBoxText preset_combo_;
+    Gtk::Button preset_import_;
+    Gtk::Button preset_export_;
+    Gtk::TextView persona_description_;
+    Gtk::ScrolledWindow persona_description_scroll_;
+    Gtk::CheckButton instruct_mode_;
+    Gtk::ComboBoxText instruct_format_;
+    Gtk::TextView context_template_;
+    Gtk::ScrolledWindow context_template_scroll_;
+    Gtk::SpinButton top_k_;
+    Gtk::SpinButton repetition_penalty_;
+    Gtk::SpinButton presence_penalty_;
+    Gtk::SpinButton frequency_penalty_;
+    Gtk::TextView regex_rules_;
+    Gtk::ScrolledWindow regex_rules_scroll_;
+    Gtk::TextView variables_;
+    Gtk::ScrolledWindow variables_scroll_;
 };
 
 }  // namespace ui

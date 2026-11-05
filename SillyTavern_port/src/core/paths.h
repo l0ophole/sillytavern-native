@@ -9,6 +9,8 @@ struct Paths {
     std::filesystem::path data_dir;
     std::filesystem::path characters_dir;
     std::filesystem::path chats_dir;
+    std::filesystem::path world_info_dir;
+    std::filesystem::path presets_dir;
     std::filesystem::path logs_dir;
     std::filesystem::path settings_file;
     std::filesystem::path instance_lock_file;

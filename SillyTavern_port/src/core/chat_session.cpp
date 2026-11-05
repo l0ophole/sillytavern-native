@@ -1,7 +1,10 @@
 #include "core/chat_session.h"
 
+#include "core/atomic_file.h"
 #include "core/context_budget.h"
 #include "core/identity.h"
+#include "core/names.h"
+#include "core/sampling.h"
 
 #include <cctype>
 #include <chrono>
@@ -155,7 +158,10 @@ ChatSession::ChatSession(CharacterCard card,
       chat_(std::move(chat)) {}
 
 std::vector<PromptMessage> ChatSession::prompt_messages() const {
-    const PromptParts parts = build_prompt_parts(card_, settings_, chat_.messages);
+    const PersonaStore* persona = persona_store_set_ ? &persona_store_ : nullptr;
+    const PromptManager* manager = prompt_manager_set_ ? &prompt_manager_ : nullptr;
+    const PromptParts parts = build_prompt_parts_with_book(
+        card_, settings_, chat_.messages, world_info_book_, persona, manager);
 
     std::vector<PromptMessage> reserved = parts.leading_system;
     reserved.insert(reserved.end(), parts.trailing_system.begin(), parts.trailing_system.end());
@@ -181,13 +187,112 @@ std::vector<PromptMessage> ChatSession::prompt_messages() const {
     return messages;
 }
 
+void ChatSession::set_world_info_book(const WorldInfoBook& book) {
+    world_info_book_ = book;
+}
+
+void ChatSession::set_persona_store(const PersonaStore& store) {
+    persona_store_ = store;
+    persona_store_set_ = true;
+}
+
+const PersonaStore* ChatSession::persona_store() const {
+    return persona_store_set_ ? &persona_store_ : nullptr;
+}
+
+void ChatSession::load_persona_store(const std::filesystem::path& data_root) {
+    persona_store_ = PersonaStore::load(data_root / "personas.json");
+    persona_store_set_ = true;
+}
+
+void ChatSession::save_persona_store(const std::filesystem::path& data_root) const {
+    if (persona_store_set_) {
+        persona_store_.save(data_root / "personas.json");
+    }
+}
+
+void ChatSession::set_prompt_manager(const PromptManager& manager,
+                                     const Json& sampling_overrides) {
+    prompt_manager_ = manager;
+    sampling_overrides_ = sampling_overrides.is_object() ? sampling_overrides : Json::object();
+    prompt_manager_set_ = true;
+}
+
+const PromptManager* ChatSession::prompt_manager() const {
+    return prompt_manager_set_ ? &prompt_manager_ : nullptr;
+}
+
+void ChatSession::load_prompt_preset(const std::filesystem::path& presets_dir,
+                                     const std::string& preset_name) {
+    const std::string sanitized = sanitize_filename(preset_name, "default");
+    const std::filesystem::path path = safe_join(presets_dir, sanitized + ".json");
+    if (!file_exists(path)) {
+        prompt_manager_ = PromptManager::default_manager();
+        prompt_manager_.active_preset = sanitized;
+        sampling_overrides_ = Json::object();
+        prompt_manager_set_ = true;
+        return;
+    }
+    const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "preset");
+    const PromptPreset preset = PromptPreset::from_json(parse_json(text, "preset"));
+    PromptManager manager;
+    manager.active_preset = sanitized;
+    manager.sections = preset.sections;
+    set_prompt_manager(manager, preset.sampling_overrides);
+}
+
+void ChatSession::load_world_info_book(const std::filesystem::path& dir,
+                                       const std::string& book_name) {
+    world_info_book_ = WorldInfoBook{};
+    const std::string sanitized = sanitize_filename(book_name, "lorebook");
+    const std::filesystem::path path = safe_join(dir, sanitized + ".json");
+    if (!file_exists(path)) {
+        return;
+    }
+    const std::string text = read_file_limited(path, 16u * 1024u * 1024u, "world info");
+    world_info_book_ = WorldInfoBook::from_json(parse_json(text, "world info"));
+    world_info_book_.name = sanitized;
+}
+
 OpenAiRequest ChatSession::request() const {
     OpenAiRequest request;
     request.base_url = settings_.api_base_url;
     request.api_key = settings_.api_key;
     request.model = settings_.model;
     request.messages = prompt_messages();
-    request.sampling = sampling_from_settings(settings_);
+    // Preset sampling_overrides win over settings; unknown or mistyped
+    // fields are ignored, and the merged result is clamped. Field names
+    // mirror Settings/Sampling (see sampling.cpp).
+    Sampling sampling = sampling_from_settings(settings_);
+    if (prompt_manager_set_ && sampling_overrides_.is_object()) {
+        const Json& overrides = sampling_overrides_;
+        auto number = [&overrides](const char* key, double& target) {
+            if (overrides.contains(key) && overrides[key].is_number()) {
+                target = overrides[key].get<double>();
+            }
+        };
+        auto integer = [&overrides](const char* key, int& target) {
+            if (overrides.contains(key) && overrides[key].is_number_integer()) {
+                target = overrides[key].get<int>();
+            } else if (overrides.contains(key) && overrides[key].is_number_unsigned()) {
+                target = static_cast<int>(overrides[key].get<unsigned long long>());
+            }
+        };
+        number("temperature", sampling.temperature);
+        number("top_p", sampling.top_p);
+        integer("max_tokens", sampling.max_tokens);
+        integer("top_k", sampling.top_k);
+        number("repetition_penalty", sampling.repetition_penalty);
+        number("presence_penalty", sampling.presence_penalty);
+        number("frequency_penalty", sampling.frequency_penalty);
+        number("dry_multiplier", sampling.dry_multiplier);
+        number("mirostat_tau", sampling.mirostat_tau);
+        if (overrides.contains("stream") && overrides["stream"].is_boolean()) {
+            sampling.stream = overrides["stream"].get<bool>();
+        }
+        sampling = clamp_sampling(sampling);
+    }
+    request.sampling = sampling;
     request.timeout_seconds = settings_.request_timeout_seconds;
     return request;
 }

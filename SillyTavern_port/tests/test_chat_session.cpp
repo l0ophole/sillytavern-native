@@ -1,6 +1,7 @@
 #include "test_util.h"
 #include "temp_dir.h"
 
+#include "core/atomic_file.h"
 #include "core/chat_session.h"
 #include "core/chat_store.h"
 #include "core/context_budget.h"
@@ -129,6 +130,117 @@ TEST(session_request_uses_settings_and_sampling) {
     CHECK_EQ(request.timeout_seconds, settings.request_timeout_seconds);
     CHECK_EQ(request.messages.size(), session.prompt_messages().size());
     CHECK_EQ(request.messages.front().role, "system");
+}
+
+TEST(session_prompt_manager_disables_section_and_sampling_override_wins) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    st::CharacterCard card = make_card();
+    card.scenario = "A cave";
+    st::Settings settings;
+    settings.user_name = "Traveler";
+    settings.temperature = 1.0;
+    settings.top_p = 0.9;
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello.");
+    st::ChatSession session(card, settings, store, "Seraphina", "chat.jsonl", chat);
+
+    st::PromptManager manager = st::PromptManager::default_manager();
+    for (auto& section : manager.sections) {
+        if (section.id == "scenario") section.enabled = false;
+    }
+    st::Json overrides = st::Json::object();
+    overrides["temperature"] = 0.2;
+    overrides["top_p"] = 99.0;  // out of range: clamped to 1.0
+    session.set_prompt_manager(manager, overrides);
+
+    const auto prompt = session.prompt_messages();
+    for (const auto& message : prompt) {
+        CHECK(message.content.find("A cave") == std::string::npos);
+        CHECK(message.content.find("Scenario:") == std::string::npos);
+    }
+    bool found_description = false;
+    for (const auto& message : prompt) {
+        if (message.content.find("A dragon who guards a cave.") != std::string::npos) {
+            found_description = true;
+        }
+    }
+    CHECK(found_description);
+
+    const st::OpenAiRequest request = session.request();
+    CHECK_EQ(request.sampling.temperature, 0.2);
+    CHECK_EQ(request.sampling.top_p, 1.0);  // preset value clamped
+    CHECK_EQ(request.sampling.max_tokens, settings.max_tokens);  // untouched
+}
+
+TEST(session_loads_active_preset_from_disk) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    const std::filesystem::path presets = temp.path() / "presets";
+    std::filesystem::create_directories(presets);
+    st::PromptPreset preset;
+    preset.name = "promo";
+    st::PromptSection custom;
+    custom.id = "system";
+    custom.title = "System";
+    custom.content = "Preset system text.";
+    custom.enabled = true;
+    custom.order = 0;
+    preset.sections = {custom};
+    preset.sampling_overrides = st::Json::object();
+    preset.sampling_overrides["temperature"] = 0.3;
+    st::write_file_atomic(presets / "promo.json",
+                          st::dump_json(preset.to_json(), 2) + "\n");
+
+    st::Settings settings;
+    settings.user_name = "Traveler";
+    settings.active_preset = "promo";
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.load_prompt_preset(presets, settings.active_preset);
+
+    const auto prompt = session.prompt_messages();
+    bool found = false;
+    for (const auto& message : prompt) {
+        if (message.content.find("Preset system text.") != std::string::npos) found = true;
+        // Only the custom section is enabled, so card description is absent.
+        CHECK(message.content.find("A dragon who guards a cave.") == std::string::npos);
+    }
+    CHECK(found);
+    CHECK_EQ(session.request().sampling.temperature, 0.3);
+
+    // Missing preset file falls back to the default manager.
+    st::ChatSession missing(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    missing.load_prompt_preset(presets, "does-not-exist");
+    bool found_default = false;
+    for (const auto& message : missing.prompt_messages()) {
+        if (message.content.find("A dragon who guards a cave.") != std::string::npos) {
+            found_default = true;
+        }
+    }
+    CHECK(found_default);
+}
+
+TEST(session_persona_store_injects_description) {
+    TempDir temp;
+    st::ChatStore store(temp.path());
+    st::Settings settings;
+    settings.user_name = "Traveler";
+    st::PersonaStore personas;
+    st::Persona active;
+    active.name = "Mia";
+    active.description = "Brave explorer.";
+    personas.personas.push_back(active);
+    personas.active_name = "Mia";
+    st::Chat chat = store.create("Seraphina", "Traveler", "Hello.");
+    st::ChatSession session(make_card(), settings, store, "Seraphina", "chat.jsonl", chat);
+    session.set_persona_store(personas);
+    bool found = false;
+    for (const auto& message : session.prompt_messages()) {
+        if (message.content.find("User persona (Mia): Brave explorer.") != std::string::npos) {
+            found = true;
+        }
+    }
+    CHECK(found);
 }
 
 TEST(session_append_and_save_round_trip) {
