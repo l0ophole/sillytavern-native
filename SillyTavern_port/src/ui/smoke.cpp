@@ -1355,6 +1355,175 @@ int run_smoke_test() {
             std::cout << "smoke: prompt preset\n";
         }
 
+        {
+            // Live wiring: ChatView loads personas.json and the active
+            // preset from disk; the resulting prompt carries the persona
+            // description and preset system text, omits the disabled
+            // description section, and the preset sampling override wins.
+            st::PersonaStore live_personas;
+            st::Persona mia;
+            mia.name = "Mia";
+            mia.description = "Brave explorer.";
+            live_personas.personas.push_back(mia);
+            live_personas.active_name = "Mia";
+            live_personas.save(paths.data_dir / "personas.json");
+
+            st::PromptPreset live_preset;
+            live_preset.name = "smoke-live";
+            st::PromptSection live_system;
+            live_system.id = "system";
+            live_system.title = "System";
+            live_system.content = "Live preset system.";
+            live_system.enabled = true;
+            live_system.order = 0;
+            st::PromptSection live_description;
+            live_description.id = "description";
+            live_description.title = "Description";
+            live_description.content = "";
+            live_description.enabled = false;
+            live_description.order = 1;
+            st::PromptSection live_persona;
+            live_persona.id = "persona";
+            live_persona.title = "Persona";
+            live_persona.content = "";
+            live_persona.enabled = true;
+            live_persona.order = 2;
+            live_preset.sections = {live_system, live_description, live_persona};
+            live_preset.sampling_overrides = st::Json::object();
+            live_preset.sampling_overrides["temperature"] = 0.25;
+            st::write_file_atomic(paths.presets_dir / "smoke-live.json",
+                                  st::dump_json(live_preset.to_json(), 2) + "\n");
+
+            st::Settings live_settings = settings;
+            live_settings.active_preset = "smoke-live";
+            live_settings.persona_name = "Mia";
+            std::string live_status;
+            ChatView live_view(chats, live_settings,
+                               [&live_status](const std::string& text) { live_status = text; },
+                               &paths);
+            live_view.show_all();
+            if (!live_view.set_character(entry)) {
+                std::cerr << "smoke: prompt live set_character failed: " << live_status << '\n';
+                return 1;
+            }
+            const st::Persona* view_active = live_view.persona_store().active();
+            if (view_active == nullptr || view_active->description != "Brave explorer.") {
+                std::cerr << "smoke: prompt live persona not loaded into view\n";
+                return 1;
+            }
+            bool view_has_system = false;
+            bool view_has_description = false;
+            for (const st::PromptSection& section :
+                 live_view.prompt_manager().enabled_sections()) {
+                if (section.id == "system" &&
+                    section.content == "Live preset system.") {
+                    view_has_system = true;
+                }
+                if (section.id == "description") {
+                    view_has_description = true;
+                }
+            }
+            if (!view_has_system || view_has_description) {
+                std::cerr << "smoke: prompt live preset not loaded into view\n";
+                return 1;
+            }
+            st::Chat live_chat = chats.create(entry.id,
+                                              st::normalize_user_name(settings.user_name),
+                                              entry.card.first_mes);
+            st::ChatSession live_session(entry.card, live_settings, chats, entry.id,
+                                         "smoke-live.jsonl", live_chat);
+            live_session.load_persona_store(paths.data_dir);
+            live_session.load_prompt_preset(paths.presets_dir, live_settings.active_preset);
+            live_session.append_user("Hello.");
+            bool found_persona = false;
+            bool found_preset_system = false;
+            for (const st::PromptMessage& message : live_session.prompt_messages()) {
+                if (message.content.find("User persona (Mia): Brave explorer.") !=
+                    std::string::npos) {
+                    found_persona = true;
+                }
+                if (message.content.find("Live preset system.") != std::string::npos) {
+                    found_preset_system = true;
+                }
+                if (message.content.find("Synthetic character card") != std::string::npos) {
+                    std::cerr << "smoke: prompt live disabled section leaked\n";
+                    return 1;
+                }
+            }
+            if (!found_persona || !found_preset_system ||
+                live_session.request().sampling.temperature != 0.25) {
+                std::cerr << "smoke: prompt live prompt mismatch\n";
+                return 1;
+            }
+            std::cout << "smoke: prompt live\n";
+        }
+
+        {
+            // Corrupt world-info file must survive a dialog save attempt.
+            const std::filesystem::path lore_file =
+                paths.world_info_dir / "corrupt-lore.json";
+            st::write_file_atomic(lore_file, "{");
+            st::Settings corrupt_wi = settings;
+            corrupt_wi.world_info_book = "corrupt-lore";
+            bool wi_refused = false;
+            {
+                WorldInfoDialog dialog(window, paths, corrupt_wi, []() {});
+                if (dialog.load_error().empty()) {
+                    std::cerr << "smoke: world info corrupt load error missing\n";
+                    return 1;
+                }
+                try {
+                    dialog.save();
+                } catch (const std::exception&) {
+                    wi_refused = true;
+                }
+            }
+            std::string preserved;
+            {
+                std::ifstream input(lore_file);
+                preserved.assign(std::istreambuf_iterator<char>(input),
+                                 std::istreambuf_iterator<char>());
+            }
+            if (!wi_refused || preserved != "{") {
+                std::cerr << "smoke: world info corrupt file clobbered\n";
+                return 1;
+            }
+            std::cout << "smoke: world info corrupt\n";
+        }
+
+        {
+            // Corrupt preset file must survive a dialog save attempt.
+            const std::filesystem::path preset_file =
+                paths.presets_dir / "corrupt-preset.json";
+            st::write_file_atomic(preset_file, "{");
+            st::Settings corrupt_preset = settings;
+            corrupt_preset.active_preset = "corrupt-preset";
+            bool preset_refused = false;
+            {
+                PromptManagerDialog dialog(window, paths, corrupt_preset, []() {});
+                if (dialog.load_error().empty()) {
+                    std::cerr << "smoke: prompt preset corrupt load error missing\n";
+                    return 1;
+                }
+                try {
+                    dialog.save();
+                } catch (const std::exception&) {
+                    preset_refused = true;
+                }
+            }
+            std::string preserved;
+            {
+                std::ifstream input(preset_file);
+                preserved.assign(std::istreambuf_iterator<char>(input),
+                                 std::istreambuf_iterator<char>());
+            }
+            if (!preset_refused || preserved != "{") {
+                std::cerr << "smoke: prompt preset corrupt file clobbered\n";
+                return 1;
+            }
+            std::cout << "smoke: prompt preset corrupt\n";
+        }
+
         window.hide();
         return 0;
     } catch (const std::exception& error) {

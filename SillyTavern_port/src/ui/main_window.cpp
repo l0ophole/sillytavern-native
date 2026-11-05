@@ -393,6 +393,11 @@ void WorldInfoDialog::load() {
 }
 
 void WorldInfoDialog::save() {
+    if (!load_error_.empty()) {
+        // Refuse to save over a file that failed to load: book_ is
+        // default-empty, so writing would clobber the corrupt file.
+        throw std::runtime_error(load_error_);
+    }
     book_.name = sanitize_filename(settings_.world_info_book, "lorebook");
     const std::filesystem::path path = book_path();
     std::error_code error;
@@ -918,6 +923,11 @@ void PromptManagerDialog::load() {
 }
 
 void PromptManagerDialog::save() {
+    if (!load_error_.empty()) {
+        // Refuse to save over a file that failed to load: preset_ is
+        // default-empty, so writing would clobber the corrupt file.
+        throw std::runtime_error(load_error_);
+    }
     const std::string entered = preset_name_entry_.get_text().raw();
     if (!entered.empty()) {
         preset_name_ = sanitize_filename(entered, "default");
