@@ -5,6 +5,8 @@
 #include "core/chat_store.h"
 #include "core/draft_throttle.h"
 #include "core/paths.h"
+#include "core/persona.h"
+#include "core/prompt_manager.h"
 #include "core/settings.h"
 #include "core/world_info.h"
 
@@ -49,6 +51,10 @@ public:
     bool branch_from(std::size_t index);
     void set_world_info_book(const st::WorldInfoBook& book);
     const st::WorldInfoBook& world_info_book() const { return world_info_book_; }
+    void set_persona_store(const st::PersonaStore& store);
+    const st::PersonaStore& persona_store() const { return persona_store_; }
+    void set_prompt_manager(const st::PromptManager& manager, const st::Json& sampling_overrides);
+    const st::PromptManager& prompt_manager() const { return prompt_manager_; }
 
 private:
     struct ChatLoadResult {
@@ -95,6 +101,11 @@ private:
     bool load_chat(const std::string& filename);
     void load_world_info_book();
     void apply_world_info_book();
+    void load_persona_store();
+    void apply_persona_store();
+    void load_prompt_manager();
+    void apply_prompt_manager();
+    void apply_prompt_sources();
     std::string new_chat_filename() const;
     void refresh_selector();
     void refresh_transcript();
@@ -111,6 +122,9 @@ private:
     std::function<void(const std::string&)> on_status_;
     const st::Paths* paths_ = nullptr;
     st::WorldInfoBook world_info_book_;
+    st::PersonaStore persona_store_;
+    st::PromptManager prompt_manager_ = st::PromptManager::default_manager();
+    st::Json sampling_overrides_ = st::Json::object();
 
     st::CharacterCard card_;
     std::string character_key_;

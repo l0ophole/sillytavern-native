@@ -204,6 +204,84 @@ void ChatView::apply_world_info_book() {
     }
 }
 
+void ChatView::set_persona_store(const st::PersonaStore& store) {
+    persona_store_ = store;
+    apply_persona_store();
+}
+
+void ChatView::apply_persona_store() {
+    if (session_) {
+        session_->set_persona_store(persona_store_);
+    }
+}
+
+void ChatView::set_prompt_manager(const st::PromptManager& manager,
+                                  const st::Json& sampling_overrides) {
+    prompt_manager_ = manager;
+    sampling_overrides_ =
+        sampling_overrides.is_object() ? sampling_overrides : st::Json::object();
+    apply_prompt_manager();
+}
+
+void ChatView::apply_prompt_manager() {
+    if (session_) {
+        session_->set_prompt_manager(prompt_manager_, sampling_overrides_);
+    }
+}
+
+void ChatView::apply_prompt_sources() {
+    apply_world_info_book();
+    apply_persona_store();
+    apply_prompt_manager();
+}
+
+void ChatView::load_persona_store() {
+    if (paths_ == nullptr) {
+        apply_persona_store();
+        return;
+    }
+    try {
+        st::ChatSession probe(card_, settings_, chats_, character_key_, "", st::Chat{});
+        probe.load_persona_store(paths_->data_dir);
+        if (const st::PersonaStore* loaded = probe.persona_store()) {
+            persona_store_ = *loaded;
+        } else {
+            persona_store_ = st::PersonaStore{};
+        }
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error, std::string("persona load failed: ") + error.what());
+        persona_store_ = st::PersonaStore{};
+        set_status(std::string("Persona error: ") + error.what());
+    }
+    apply_persona_store();
+}
+
+void ChatView::load_prompt_manager() {
+    if (paths_ == nullptr) {
+        prompt_manager_ = st::PromptManager::default_manager();
+        sampling_overrides_ = st::Json::object();
+        apply_prompt_manager();
+        return;
+    }
+    try {
+        st::ChatSession probe(card_, settings_, chats_, character_key_, "", st::Chat{});
+        probe.load_prompt_preset(paths_->presets_dir, settings_.active_preset);
+        if (const st::PromptManager* loaded = probe.prompt_manager()) {
+            prompt_manager_ = *loaded;
+        } else {
+            prompt_manager_ = st::PromptManager::default_manager();
+        }
+        sampling_overrides_ = probe.sampling_overrides();
+    } catch (const std::exception& error) {
+        st::log_write(st::LogLevel::Error,
+                      std::string("prompt preset load failed: ") + error.what());
+        prompt_manager_ = st::PromptManager::default_manager();
+        sampling_overrides_ = st::Json::object();
+        set_status(std::string("Prompt preset error: ") + error.what());
+    }
+    apply_prompt_manager();
+}
+
 void ChatView::load_world_info_book() {
     if (paths_ == nullptr) {
         apply_world_info_book();
@@ -231,6 +309,8 @@ bool ChatView::set_character(const st::CharacterEntry& entry) {
         card_.name = character_name_;
     }
     load_world_info_book();
+    load_persona_store();
+    load_prompt_manager();
     session_.reset();
     filename_.clear();
 
@@ -254,6 +334,8 @@ bool ChatView::set_character_async(const st::CharacterEntry& entry) {
         card_.name = character_name_;
     }
     load_world_info_book();
+    load_persona_store();
+    load_prompt_manager();
     session_.reset();
     filename_.clear();
 
@@ -289,6 +371,8 @@ void ChatView::refresh_settings() {
     }
     session_->settings() = settings_;
     load_world_info_book();
+    load_persona_store();
+    load_prompt_manager();
     refresh_transcript();
 }
 
@@ -1015,7 +1099,7 @@ bool ChatView::create_new_chat(bool announce) {
         chats_.save(character_key_, filename_, chat);
         session_ = std::make_unique<st::ChatSession>(
             card_, settings_, chats_, character_key_, filename_, std::move(chat));
-        apply_world_info_book();
+        apply_prompt_sources();
         refresh_selector();
         refresh_transcript();
         update_controls();
@@ -1084,7 +1168,7 @@ bool ChatView::apply_load_result(ChatLoadResult& result) {
         filename_ = result.filename;
         session_ = std::make_unique<st::ChatSession>(
             card_, settings_, chats_, character_key_, filename_, std::move(result.chat));
-        apply_world_info_book();
+        apply_prompt_sources();
 
         if (!result.draft_error.empty()) {
             st::log_write(st::LogLevel::Error,
