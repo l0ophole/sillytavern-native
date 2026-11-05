@@ -13,8 +13,8 @@ TEST(prompt_manager_default_order) {
     const st::PromptManager manager = st::PromptManager::default_manager();
     CHECK_EQ(manager.sections.size(), std::size_t(9));
     const std::vector<std::string> expected = {"system",        "description", "personality",
-                                               "scenario",      "examples",    "world_info",
-                                               "persona",       "authors_note", "post_history"};
+                                               "scenario",      "examples",    "persona",
+                                               "world_info",    "authors_note", "post_history"};
     for (std::size_t i = 0; i < expected.size(); ++i) {
         CHECK_EQ(manager.sections[i].id, expected[i]);
         CHECK_EQ(manager.sections[i].order, static_cast<int>(i));
@@ -134,6 +134,83 @@ TEST(prompt_preset_round_trips) {
     CHECK_EQ(tolerant.sections.size(), std::size_t(1));
     CHECK_EQ(tolerant.sections[0].id, "system");
     CHECK_EQ(tolerant.sections[0].content, "");
+}
+
+TEST(prompt_manager_legacy_flags_gate_builtin_sections) {
+    // Precedence (pinned): a present manager's empty-content world_info /
+    // authors_note builtins are gated by the legacy settings flags, so the
+    // manager branch does not silently re-enable lore/notes the user turned
+    // off. Non-empty custom section content is an explicit override and
+    // bypasses the legacy flags.
+    st::CharacterCard card;
+    card.name = "Seraphina";
+    st::Settings settings;
+    settings.user_name = "Alice";
+    settings.world_info_book = "lorebook";
+    settings.world_info_enabled = false;
+    settings.authors_note_enabled = false;
+    settings.authors_note = "Note text";
+    st::WorldInfoBook book;
+    book.entries = {{"dragon", "", "Dragons are rare.", true, 0, 0}};
+    st::ChatMessage user;
+    user.name = "Alice";
+    user.is_user = true;
+    user.mes = "I saw a dragon";
+
+    st::PromptManager manager = st::PromptManager::default_manager();
+    const auto gated = st::build_prompt_parts_with_book(
+        card, settings, {user}, book, nullptr, &manager);
+    for (const auto& message : gated.leading_system) {
+        CHECK(message.content.find("World Info:") == std::string::npos);
+        CHECK(message.content.find("Dragons are rare.") == std::string::npos);
+    }
+    for (const auto& message : gated.history) {
+        CHECK(message.content.find("Note text") == std::string::npos);
+    }
+    // Default order matches legacy: persona section precedes world_info.
+    const auto enabled = manager.enabled_sections();
+    std::size_t persona_order = enabled.size();
+    std::size_t world_order = enabled.size();
+    for (std::size_t i = 0; i < enabled.size(); ++i) {
+        if (enabled[i].id == "persona") persona_order = i;
+        if (enabled[i].id == "world_info") world_order = i;
+    }
+    CHECK(persona_order < world_order);
+
+    settings.world_info_enabled = true;
+    settings.authors_note_enabled = true;
+    const auto ungated = st::build_prompt_parts_with_book(
+        card, settings, {user}, book, nullptr, &manager);
+    bool found_lore = false;
+    bool found_note = false;
+    for (const auto& message : ungated.leading_system) {
+        if (message.content.find("Dragons are rare.") != std::string::npos) found_lore = true;
+    }
+    for (const auto& message : ungated.history) {
+        if (message.content.find("Note text") != std::string::npos) found_note = true;
+    }
+    CHECK(found_lore);
+    CHECK(found_note);
+
+    // Custom content overrides the legacy flags.
+    settings.world_info_enabled = false;
+    settings.authors_note_enabled = false;
+    for (auto& section : manager.sections) {
+        if (section.id == "world_info") section.content = "Custom lore";
+        if (section.id == "authors_note") section.content = "Custom note";
+    }
+    const auto custom = st::build_prompt_parts_with_book(
+        card, settings, {user}, book, nullptr, &manager);
+    bool found_custom_lore = false;
+    bool found_custom_note = false;
+    for (const auto& message : custom.leading_system) {
+        if (message.content.find("Custom lore") != std::string::npos) found_custom_lore = true;
+    }
+    for (const auto& message : custom.history) {
+        if (message.content.find("Custom note") != std::string::npos) found_custom_note = true;
+    }
+    CHECK(found_custom_lore);
+    CHECK(found_custom_note);
 }
 
 TEST(prompt_manager_move_reorders) {

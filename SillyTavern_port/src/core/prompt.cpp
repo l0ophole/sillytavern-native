@@ -280,6 +280,12 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
     const std::string user = effective_user(settings, persona_store);
     const std::vector<RegexRule> regex_rules = parse_regex_rules(settings.regex_rules);
 
+    // Manager precedence (pinned): when a PromptManager is present its
+    // enabled sections drive which blocks are emitted, but the legacy
+    // Settings flags still gate the *builtin* (empty-content) world_info
+    // and authors_note text — so a manager cannot silently re-enable lore
+    // or notes the user turned off. A section with non-empty custom
+    // content is an explicit per-preset override and bypasses those flags.
     if (prompt_manager != nullptr) {
         const std::vector<PromptSection> ordered = prompt_manager->enabled_sections();
         auto find_section = [&ordered](const char* id) -> const PromptSection* {
@@ -364,7 +370,7 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
                 if (!section.content.empty()) {
                     parts.leading_system.push_back(PromptMessage{
                         "system", expand_macros(section.content, character, user, settings.variables)});
-                } else if (!book.entries.empty()) {
+                } else if (settings.world_info_enabled && !book.entries.empty()) {
                     std::vector<std::string> texts;
                     for (const ChatMessage& message : history) {
                         if (!message.mes.empty()) {
@@ -408,8 +414,14 @@ PromptParts build_prompt_parts_with_book(const CharacterCard& card,
         flush_buffer();
 
         if (const PromptSection* authors = find_section("authors_note")) {
-            const std::string note = section_text(*authors,
-                                                  expand_macros(settings.authors_note, character, user, settings.variables));
+            // Legacy authors_note_enabled gates the builtin note; custom
+            // section content overrides it (see manager precedence note).
+            const std::string note =
+                !authors->content.empty()
+                    ? expand_macros(authors->content, character, user, settings.variables)
+                    : (settings.authors_note_enabled
+                           ? expand_macros(settings.authors_note, character, user, settings.variables)
+                           : std::string{});
             if (!note.empty()) {
                 insert_at_depth(parts.history, PromptMessage{"system", note},
                                 settings.authors_note_depth);

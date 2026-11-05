@@ -86,10 +86,12 @@ Json PromptPreset::to_json() const {
 PromptManager PromptManager::default_manager() {
     PromptManager manager;
     manager.active_preset = "default";
+    // Order matches the legacy (manager-less) prompt builder, which emits
+    // the persona description before world-info lore.
     const char* ids[] = {"system",       "description", "personality", "scenario", "examples",
-                         "world_info",   "persona",     "authors_note", "post_history"};
+                         "persona",      "world_info",  "authors_note", "post_history"};
     const char* titles[] = {"System",     "Description", "Personality", "Scenario", "Examples",
-                            "World Info", "Persona",     "Author's Note", "Post History"};
+                            "Persona",    "World Info",  "Author's Note", "Post History"};
     for (int i = 0; i < 9; ++i) {
         PromptSection section;
         section.id = ids[i];
